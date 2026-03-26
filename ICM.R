@@ -4,7 +4,7 @@
 ### xprockox@gmail.com
 
 ################################################################################
-############################## PACKAGES #########################################
+############---------- Packages and user settings ---------#####################
 ################################################################################
 library(dplyr)
 library(lubridate)
@@ -28,9 +28,8 @@ wolf_range <- "NR"
 ##
 #
 
-
 ################################################################################
-############################## ELK DATA #########################################
+############---------------- Load elk data ----------------#####################
 ################################################################################
 
 load("data/elk_adultSurvival_cjsMatrices.rData")
@@ -79,7 +78,7 @@ elk_n_years <- nrow(elk_dat_n)
 elk_N_indiv <- nrow(elk_y)
 
 ################################################################################
-############################## WOLF DATA ########################################
+############--------------- Load wolf data ----------------#####################
 ################################################################################
 
 load("data/wolf_adultSurvival_cjsMatrices.rData")
@@ -124,7 +123,7 @@ wolf_n_years <- nrow(wolf_pop)
 wolf_N_indiv <- nrow(wolf_y)
 
 ################################################################################
-###################### COMMUNITY ALIGNMENT ######################################
+########---------- Align elk and wolf data to same years ---------##############
 ################################################################################
 
 # choose years shared by BOTH elk and wolf submodels
@@ -164,12 +163,12 @@ if (elk_n_years != wolf_n_years) {
 n_years <- elk_n_years
 
 ################################################################################
-############################## ICM CODE #########################################
+############---------------- ICM NIMBLE Code --------------#####################
 ################################################################################
 
 icm_code <- nimbleCode({
   
-  ############################ ELK SUBMODEL ################################
+  ##########---------------- ELK SUBMODEL ----------------#############
   
   # elk priors
   for (t in 1:n_years) {
@@ -270,7 +269,7 @@ icm_code <- nimbleCode({
     elk_harvested_13yo[t] ~ dbin(elk_p_13[t], elk_harvested_ya[t])
   }
   
-  ############################ WOLF SUBMODEL ###############################
+  ##########---------------- WOLF SUBMODEL ----------------#############
   
   # wolf priors
   for (t in 1:n_years) {
@@ -336,13 +335,13 @@ icm_code <- nimbleCode({
     }
   }
   
-  ######################## COMMUNITY LINK ##################################
+  ##########---------------- REGRESSIONS ----------------#############
   # empty for now
   
 })
 
 ################################################################################
-########################### CONSTANTS AND DATA ##################################
+###########---------------- Constants and data ----------------#################
 ################################################################################
 
 icm_constants <- list(
@@ -387,7 +386,7 @@ icm_data <- list(
 )
 
 ################################################################################
-############################## INITIAL VALUES ###################################
+###########----------------- Initial values -------------------#################
 ################################################################################
 
 make_icm_inits <- function() {
@@ -491,7 +490,7 @@ make_icm_inits <- function() {
 }
 
 ################################################################################
-############################ PARAMETERS #########################################
+###########-------------------- Parameters --------------------#################
 ################################################################################
 
 icm_params <- c(
@@ -508,7 +507,7 @@ icm_params <- c(
 )
 
 ################################################################################
-############################### RUN MODEL #######################################
+###########------------------- Run model ----------------------#################
 ################################################################################
 
 set.seed(17)
@@ -535,9 +534,10 @@ icm_mod <- nimbleMCMC(
 save.image('ICM_environment_2026-03-26.RData')
 
 ################################################################################
-############################### RESULTS ########################################
+###########--------------------- Results ----------------------#################
 ################################################################################
 
+# simple summary
 round(icm_mod$summary$all.chains, 2)
 
 # pull nimble summary table
@@ -545,7 +545,7 @@ post_sum <- as.data.frame(icm_mod$summary$all.chains)
 post_sum$param <- rownames(post_sum)
 
 # =============================================================================
-# clean icm_mod$samples so MCMCvis works
+# Clean icm_mod$samples so MCMCvis works
 # =============================================================================
 
 # 1) extract each chain as a plain matrix
@@ -578,7 +578,6 @@ icm_clean <- mcmc.list(lapply(mats2, function(M) {
 # quick check
 round(MCMCsummary(icm_clean, params = "all"), 2)
 
-
 # -----------------------------------------------------------------------------
 # helper function to extract indexed parameters like elk_N_female[1], [2], ...
 # -----------------------------------------------------------------------------
@@ -590,13 +589,68 @@ extract_indexed_param <- function(summary_df, param_base) {
 }
 
 ################################################################################
-### ELK ABUNDANCES
+###########------------ Checking model convergence ------------#################
 ################################################################################
 
+# elk abundances
 elk_N_summ <- MCMCsummary(
   icm_clean,
   params = c("elk_N_1y", "elk_N_ya", "elk_N_oa", "elk_N_female")
 )
+
+bad_elk_N_rhats <- data.frame(
+  param = rownames(elk_N_summ),
+  Rhat = elk_N_summ[, "Rhat"]
+)
+
+bad_elk_N_rhats <- bad_elk_N_rhats[bad_elk_N_rhats$Rhat > 1.1, ]
+bad_elk_N_rhats
+
+# elk vital rates
+elk_vrates <- MCMCsummary(
+  icm_clean,
+  params = c("elk_s_c", "elk_s_ya", "elk_s_oa", "elk_p_13", "elk_f_ya", "elk_f_oa")
+) 
+
+bad_elk_vrate_rhats <- data.frame(
+  param = rownames(elk_vrates),
+  Rhat = elk_vrates[, "Rhat"]
+)
+
+bad_elk_vrate_rhats <- bad_elk_vrate_rhats[bad_elk_vrate_rhats$Rhat > 1.1, ]
+bad_elk_vrate_rhats
+
+# wolf abundances
+wolf_N_summ <- MCMCsummary(
+  icm_clean,
+  params = c("wolf_N_p", "wolf_N_a", "wolf_N_tot")
+)
+
+bad_wolf_N_rhats <- data.frame(
+  param = rownames(wolf_N_summ),
+  Rhat = wolf_N_summ[, "Rhat"]
+)
+
+bad_wolf_N_rhats <- bad_wolf_N_rhats[bad_wolf_N_rhats$Rhat > 1.1, ]
+bad_wolf_N_rhats
+
+# wolf vital rates
+wolf_vrates <- MCMCsummary(
+  icm_clean,
+  params = c("wolf_s_p", "wolf_s_a", "wolf_f")
+) 
+
+bad_wolf_vrate_rhats <- data.frame(
+  param = rownames(wolf_vrates),
+  Rhat = wolf_vrates[, "Rhat"]
+)
+
+bad_wolf_vrate_rhats <- bad_wolf_vrate_rhats[bad_wolf_vrate_rhats$Rhat > 1.1, ]
+bad_wolf_vrate_rhats
+
+################################################################################
+###########--------- Plotting elk abundance posteriors --------#################
+################################################################################
 
 elk_N_summ <- elk_N_summ %>%
   rownames_to_column("param") %>%
@@ -667,13 +721,10 @@ elk_validation_plot <- ggplot(elk_N_summ, aes(x = year, y = mean, group = stage)
 elk_validation_plot
 
 ################################################################################
-### ELK VITAL RATES
+###########--------- Plotting elk vital rate posteriors -------#################
 ################################################################################
 
-elk_vrates <- MCMCsummary(
-  icm_clean,
-  params = c("elk_s_c", "elk_s_ya", "elk_s_oa", "elk_p_13", "elk_f_ya", "elk_f_oa")
-) %>%
+elk_vrates <- elk_vrates %>%
   as.data.frame() %>%
   rownames_to_column("param") %>%
   rename(mean = mean, low = `2.5%`, high = `97.5%`)
@@ -736,9 +787,9 @@ elk_vrate_plot <- ggplot(elk_vrates2, aes(x = year, y = mean)) +
 
 elk_vrate_plot
 
-# =============================================================================
-# WOLF ABUNDANCES
-# =============================================================================
+################################################################################
+###########--------- Plotting wolf abundance posteriors -------#################
+################################################################################
 
 wolf_N_summ <- MCMCsummary(
   icm_clean,
@@ -760,10 +811,6 @@ wolf_N_summ <- MCMCsummary(
     "wolf_N_tot" = "Total Wolves"
   ))
 
-################################################################################
-### observed wolf data in matching long format
-################################################################################
-
 wolf_dat_long <- wolf_pop %>%
   select(seasonal.year, summer_pups, dec_adults, total_abundance) %>%
   rename(year = seasonal.year) %>%
@@ -780,10 +827,6 @@ wolf_dat_long <- wolf_pop %>%
   ))
 
 wolf_dat_long$stage <- factor(wolf_dat_long$stage, levels = unique(wolf_N_summ$stage))
-
-################################################################################
-### faceted validation plot
-################################################################################
 
 wolf_validation_plot <- ggplot(wolf_N_summ, aes(x = year, y = mean, group = stage)) +
   geom_ribbon(aes(ymin = low, ymax = high, fill = stage), alpha = 0.2) +
@@ -813,7 +856,7 @@ wolf_validation_plot <- ggplot(wolf_N_summ, aes(x = year, y = mean, group = stag
 wolf_validation_plot
 
 ################################################################################
-### WOLF VITAL RATES
+##########--------- Plotting wolf vital rate posteriors -------#################
 ################################################################################
 
 wolf_vrates <- MCMCsummary(
@@ -869,4 +912,4 @@ wolf_vrate_plot <- ggplot(wolf_vrates2, aes(x = year, y = mean)) +
 
 wolf_vrate_plot
 
-
+################################################################################
