@@ -542,8 +542,8 @@ icm_params <- c(
 
 set.seed(17)
 nc <- 3
-ni <- 10
-nb <- 2
+ni <- 1000000
+nb <- 200000
 th <- 4
 
 icm_mod <- nimbleMCMC(
