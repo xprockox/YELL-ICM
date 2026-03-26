@@ -530,8 +530,343 @@ icm_mod <- nimbleMCMC(
   summary = TRUE
 )
 
+# SAVE OUTPUT
+# stop('The following line will overwrite data. Are you sure you would like to proceed?')
+save.image('ICM_environment_2026-03-26.RData')
+
 ################################################################################
-############################## QUICK CHECK ######################################
+############################### RESULTS ########################################
 ################################################################################
 
 round(icm_mod$summary$all.chains, 2)
+
+# pull nimble summary table
+post_sum <- as.data.frame(icm_mod$summary$all.chains)
+post_sum$param <- rownames(post_sum)
+
+# =============================================================================
+# clean icm_mod$samples so MCMCvis works
+# =============================================================================
+
+# 1) extract each chain as a plain matrix
+mats <- lapply(icm_mod$samples, function(ch) as.matrix(ch))
+
+# 2) trim all chains to the same length
+lens <- sapply(mats, nrow)
+L <- min(lens)
+
+mats_trim <- lapply(mats, function(M) {
+  tail(M, L)
+})
+
+# 3) rebuild a consistent mcmc.list
+icm_mlist <- mcmc.list(lapply(mats_trim, function(M) {
+  mcmc(M, start = 1, end = L, thin = 1)
+}))
+
+# 4) remove any parameters with NA/NaN in any chain
+mats2 <- lapply(icm_mlist, as.matrix)
+
+keep_cols <- Reduce(intersect, lapply(mats2, function(M) {
+  colnames(M)[colSums(is.na(M) | is.nan(M)) == 0]
+}))
+
+icm_clean <- mcmc.list(lapply(mats2, function(M) {
+  mcmc(M[, keep_cols, drop = FALSE], start = 1, end = nrow(M), thin = 1)
+}))
+
+# quick check
+round(MCMCsummary(icm_clean, params = "all"), 2)
+
+
+# -----------------------------------------------------------------------------
+# helper function to extract indexed parameters like elk_N_female[1], [2], ...
+# -----------------------------------------------------------------------------
+extract_indexed_param <- function(summary_df, param_base) {
+  summary_df %>%
+    filter(str_detect(param, paste0("^", param_base, "\\["))) %>%
+    mutate(year_index = as.integer(str_extract(param, "(?<=\\[)\\d+(?=\\])"))) %>%
+    arrange(year_index)
+}
+
+################################################################################
+### ELK ABUNDANCES
+################################################################################
+
+elk_N_summ <- MCMCsummary(
+  icm_clean,
+  params = c("elk_N_1y", "elk_N_ya", "elk_N_oa", "elk_N_female")
+)
+
+elk_N_summ <- elk_N_summ %>%
+  rownames_to_column("param") %>%
+  mutate(
+    stage = str_extract(param, "^elk_N_[a-zA-Z0-9_]+"),
+    t = as.integer(str_extract(param, "(?<=\\[)\\d+(?=\\])"))
+  ) %>%
+  select(stage, t, mean = mean, low = `2.5%`, high = `97.5%`) %>%
+  arrange(stage, t)
+
+elk_N_summ <- elk_N_summ %>%
+  mutate(year = community_years[t])
+
+elk_N_summ <- elk_N_summ %>%
+  mutate(stage = recode(
+    stage,
+    "elk_N_1y" = "Yearling",
+    "elk_N_ya" = "Young Adult",
+    "elk_N_oa" = "Old Adult",
+    "elk_N_female" = "Total Females"
+  ))
+
+elk_dat_long <- elk_dat_n %>%
+  pivot_longer(
+    cols = -c(year),
+    names_to = "stage",
+    values_to = "value"
+  ) %>%
+  mutate(stage = recode(
+    stage,
+    "n_calf" = "Yearling",
+    "n_cow_youngadult" = "Young Adult",
+    "n_cow_oldadult" = "Old Adult",
+    "n_female" = "Total Females"
+  ))
+
+elk_dat_long$stage <- factor(elk_dat_long$stage, levels = unique(elk_N_summ$stage))
+
+elk_dat_long <- elk_dat_long[
+  elk_dat_long$stage %in% c("Yearling", "Young Adult", "Old Adult", "Total Females"),
+]
+
+elk_validation_plot <- ggplot(elk_N_summ, aes(x = year, y = mean, group = stage)) +
+  geom_ribbon(aes(ymin = low, ymax = high, fill = stage), alpha = 0.2) +
+  geom_line(linewidth = 1) +
+  geom_point(
+    data = elk_dat_long[elk_dat_long$stage == "Total Females", ],
+    aes(y = value),
+    color = "red",
+    size = 2
+  ) +
+  geom_line(
+    data = elk_dat_long[elk_dat_long$stage == "Total Females", ],
+    aes(y = value),
+    color = "red",
+    linetype = 2
+  ) +
+  facet_wrap(~stage, scales = "free_y") +
+  theme_bw() +
+  labs(
+    x = "Year",
+    y = "Abundance",
+    title = "Elk posterior population estimates with validation data",
+    subtitle = "Ribbon = 95% credible interval, Line = posterior mean, Red = observed"
+  ) +
+  theme(legend.position = "none")
+
+elk_validation_plot
+
+################################################################################
+### ELK VITAL RATES
+################################################################################
+
+elk_vrates <- MCMCsummary(
+  icm_clean,
+  params = c("elk_s_c", "elk_s_ya", "elk_s_oa", "elk_p_13", "elk_f_ya", "elk_f_oa")
+) %>%
+  as.data.frame() %>%
+  rownames_to_column("param") %>%
+  rename(mean = mean, low = `2.5%`, high = `97.5%`)
+
+elk_vrates2 <- elk_vrates %>%
+  mutate(
+    year_index = as.integer(str_extract(param, "(?<=\\[)\\d+(?=\\])")),
+    rate = str_extract(param, "^[^\\[]+")
+  )
+
+elk_vrates2$rate <- factor(
+  elk_vrates2$rate,
+  levels = c("elk_s_c", "elk_s_ya", "elk_s_oa", "elk_p_13", "elk_f_ya", "elk_f_oa"),
+  labels = c(
+    "Calf survival (s_c)",
+    "Young Adult survival (s_ya)",
+    "Old Adult survival (s_oa)",
+    "Young→Old transition (p_13)",
+    "Fecundity (young) (f_ya)",
+    "Fecundity (old) (f_oa)"
+  )
+)
+
+elk_vrates2$year <- NA
+elk_vrates2$year[elk_vrates2$rate %in% c(
+  "Calf survival (s_c)",
+  "Young Adult survival (s_ya)",
+  "Old Adult survival (s_oa)",
+  "Young→Old transition (p_13)"
+)] <- community_years[elk_vrates2$year_index[
+  elk_vrates2$rate %in% c(
+    "Calf survival (s_c)",
+    "Young Adult survival (s_ya)",
+    "Old Adult survival (s_oa)",
+    "Young→Old transition (p_13)"
+  )
+]]
+
+elk_vrates2$year[elk_vrates2$rate %in% c(
+  "Fecundity (young) (f_ya)",
+  "Fecundity (old) (f_oa)"
+)] <- community_years[-length(community_years)][elk_vrates2$year_index[
+  elk_vrates2$rate %in% c(
+    "Fecundity (young) (f_ya)",
+    "Fecundity (old) (f_oa)"
+  )
+]]
+
+elk_vrate_plot <- ggplot(elk_vrates2, aes(x = year, y = mean)) +
+  geom_ribbon(aes(ymin = low, ymax = high, fill = rate), alpha = 0.2) +
+  geom_line(linewidth = 0.9) +
+  facet_wrap(~rate, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    x = "Year",
+    y = "Estimated value",
+    title = "Elk posterior time-varying vital rates (95% credible intervals)"
+  ) +
+  theme(legend.position = "none")
+
+elk_vrate_plot
+
+# =============================================================================
+# WOLF ABUNDANCES
+# =============================================================================
+
+wolf_N_summ <- MCMCsummary(
+  icm_clean,
+  params = c("wolf_N_p", "wolf_N_a", "wolf_N_tot")
+) %>%
+  as.data.frame() %>%
+  rownames_to_column("param") %>%
+  mutate(
+    stage = str_extract(param, "^wolf_N_[a-zA-Z0-9_]+"),
+    t = as.integer(str_extract(param, "(?<=\\[)\\d+(?=\\])"))
+  ) %>%
+  select(stage, t, mean = mean, low = `2.5%`, high = `97.5%`) %>%
+  arrange(stage, t) %>%
+  mutate(year = community_years[t]) %>%
+  mutate(stage = recode(
+    stage,
+    "wolf_N_p" = "Pups",
+    "wolf_N_a" = "Adults",
+    "wolf_N_tot" = "Total Wolves"
+  ))
+
+################################################################################
+### observed wolf data in matching long format
+################################################################################
+
+wolf_dat_long <- wolf_pop %>%
+  select(seasonal.year, summer_pups, dec_adults, total_abundance) %>%
+  rename(year = seasonal.year) %>%
+  pivot_longer(
+    cols = -c(year),
+    names_to = "stage",
+    values_to = "value"
+  ) %>%
+  mutate(stage = recode(
+    stage,
+    "summer_pups" = "Pups",
+    "dec_adults" = "Adults",
+    "total_abundance" = "Total Wolves"
+  ))
+
+wolf_dat_long$stage <- factor(wolf_dat_long$stage, levels = unique(wolf_N_summ$stage))
+
+################################################################################
+### faceted validation plot
+################################################################################
+
+wolf_validation_plot <- ggplot(wolf_N_summ, aes(x = year, y = mean, group = stage)) +
+  geom_ribbon(aes(ymin = low, ymax = high, fill = stage), alpha = 0.2) +
+  geom_line(linewidth = 1) +
+  geom_point(
+    data = wolf_dat_long,
+    aes(y = value),
+    color = "red",
+    size = 2
+  ) +
+  geom_line(
+    data = wolf_dat_long,
+    aes(y = value),
+    color = "red",
+    linetype = 2
+  ) +
+  facet_wrap(~stage, scales = "free_y") +
+  theme_bw() +
+  labs(
+    x = "Year",
+    y = "Abundance",
+    title = "Wolf posterior population estimates with validation data",
+    subtitle = "Ribbon = 95% credible interval, Line = posterior mean, Red = observed"
+  ) +
+  theme(legend.position = "none")
+
+wolf_validation_plot
+
+################################################################################
+### WOLF VITAL RATES
+################################################################################
+
+wolf_vrates <- MCMCsummary(
+  icm_clean,
+  params = c("wolf_s_p", "wolf_s_a", "wolf_f")
+) %>%
+  as.data.frame() %>%
+  rownames_to_column("param") %>%
+  rename(mean = mean, low = `2.5%`, high = `97.5%`)
+
+wolf_vrates2 <- wolf_vrates %>%
+  mutate(
+    year_index = as.integer(str_extract(param, "(?<=\\[)\\d+(?=\\])")),
+    rate = str_extract(param, "^[^\\[]+")
+  )
+
+wolf_vrates2$rate <- factor(
+  wolf_vrates2$rate,
+  levels = c("wolf_s_p", "wolf_s_a", "wolf_f"),
+  labels = c(
+    "Pup survival (s_p)",
+    "Adult survival (s_a)",
+    "Fecundity (f)"
+  )
+)
+
+wolf_vrates2$year <- NA
+wolf_vrates2$year[wolf_vrates2$rate %in% c(
+  "Pup survival (s_p)",
+  "Adult survival (s_a)"
+)] <- community_years[wolf_vrates2$year_index[
+  wolf_vrates2$rate %in% c(
+    "Pup survival (s_p)",
+    "Adult survival (s_a)"
+  )
+]]
+
+wolf_vrates2$year[wolf_vrates2$rate == "Fecundity (f)"] <- community_years[-length(community_years)][
+  wolf_vrates2$year_index[wolf_vrates2$rate == "Fecundity (f)"]
+]
+
+wolf_vrate_plot <- ggplot(wolf_vrates2, aes(x = year, y = mean)) +
+  geom_ribbon(aes(ymin = low, ymax = high, fill = rate), alpha = 0.2) +
+  geom_line(linewidth = 0.9) +
+  facet_wrap(~rate, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    x = "Year",
+    y = "Estimated value",
+    title = "Wolf posterior time-varying vital rates (95% credible intervals)"
+  ) +
+  theme(legend.position = "none")
+
+wolf_vrate_plot
+
+
