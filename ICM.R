@@ -172,7 +172,19 @@ icm_code <- nimbleCode({
   
   # elk priors
   for (t in 1:n_years) {
-    logit(elk_s_c[t]) ~ dnorm(qlogis(0.22), 1 / 0.5^2)
+    
+    # logit(elk_s_c[t]) ~ dnorm(qlogis(0.22), 1 / 0.5^2) 
+    
+    # ^ This is commented out so the regression at the bottom can run.
+    
+    # Previous error:
+    # Error: There are multiple definitions for node(s): elk_s_c[1],elk_s_c[2],
+    # elk_s_c[3],elk_s_c[4],elk_s_c[5],elk_s_c[6],elk_s_c[7],elk_s_c[8],elk_s_c[9],
+    # elk_s_c[10],elk_s_c[11],elk_s_c[12],elk_s_c[13],elk_s_c[14],elk_s_c[15],
+    # elk_s_c[16],elk_s_c[17],elk_s_c[18],elk_s_c[19],elk_s_c[20],elk_s_c[21],
+    # elk_s_c[22],elk_s_c[23],elk_s_c[24],elk_s_c[25],elk_s_c[26],elk_s_c[27],
+    # elk_s_c[28],elk_s_c[29].
+    
     logit(elk_s_ya[t]) ~ dnorm(qlogis(0.90), 1 / 0.5^2)
     logit(elk_s_oa[t]) ~ dnorm(qlogis(0.80), 1 / 0.5^2)
     logit(elk_p_13[t]) ~ dnorm(qlogis(0.15), 1 / 0.5^2)
@@ -297,7 +309,7 @@ icm_code <- nimbleCode({
     wolf_N_tot[t] <- wolf_N_p[t] + wolf_N_a[t]
     wolf_obs_tot[t] ~ dlnorm(log(wolf_N_tot[t] + 1e-6), wolf_tau_obs)
   }
-  
+
   # wolf state-space
   for (t in 1:(n_years - 1)) {
     wolf_mu_a[t + 1] <- wolf_N_p[t] + wolf_s_a[t] * wolf_N_a[t]
@@ -336,8 +348,20 @@ icm_code <- nimbleCode({
   }
   
   ##########---------------- REGRESSIONS ----------------#############
-  # empty for now
   
+  # Priors
+  beta0 ~ dnorm(0, sd=sqrt(1/0.33))
+  beta1 ~ dnorm(0, sd=sqrt(1/0.33))
+  
+  # Likelihood
+  for (t in 1:n_years){
+    
+    # first standardize wolf abundance
+    wolf_N_tot_std[t] <- (wolf_N_tot[t] - wolf_tot_mean) / wolf_tot_sd
+    
+    # then build regression model
+    logit(elk_s_c[t]) <- beta0 + beta1*wolf_N_tot_std[t] 
+  }
 })
 
 ################################################################################
@@ -347,7 +371,10 @@ icm_code <- nimbleCode({
 icm_constants <- list(
   n_years = n_years,
   elk_N_indiv = elk_N_indiv,
-  wolf_N_indiv = wolf_N_indiv
+  wolf_N_indiv = wolf_N_indiv,
+  # these are added to allow the wolf abundance metric to be standardized
+  wolf_tot_mean = mean(wolf_pop$total_abundance, na.rm = TRUE),
+  wolf_tot_sd = sd(wolf_pop$total_abundance, na.rm = TRUE)
 )
 
 icm_data <- list(
@@ -503,7 +530,10 @@ icm_params <- c(
   # wolf
   "wolf_s_p", "wolf_s_a", "wolf_f",
   "wolf_p_det",
-  "wolf_N_p", "wolf_N_a", "wolf_N_tot"
+  "wolf_N_p", "wolf_N_a", "wolf_N_tot",
+  
+  # regression coefficients
+  'beta0', 'beta1'
 )
 
 ################################################################################
@@ -512,8 +542,8 @@ icm_params <- c(
 
 set.seed(17)
 nc <- 3
-ni <- 1000000
-nb <- 200000
+ni <- 10
+nb <- 2
 th <- 4
 
 icm_mod <- nimbleMCMC(
@@ -530,7 +560,7 @@ icm_mod <- nimbleMCMC(
 )
 
 # SAVE OUTPUT
-# stop('The following line will overwrite data. Are you sure you would like to proceed?')
+stop('The following line will overwrite data. Are you sure you would like to proceed?')
 save.image('ICM_environment_2026-03-26.RData')
 
 ################################################################################
