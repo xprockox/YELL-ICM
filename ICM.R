@@ -233,12 +233,14 @@ icm_code <- nimbleCode({
         elk_is_class2[i, t - 1] * elk_s_oa[t - 1] +
         1e-10
       
-      elk_z[i, t] ~ dbern(
-        equals(t, elk_first_seen[i]) +
-          step(t - elk_first_seen[i] - 0.5) *
-          (1 - equals(t, elk_first_seen[i])) *
-          elk_z[i, t - 1] * elk_phi[i, t]
-      )
+      elk_is_first[i, t] <- equals(t, elk_first_seen[i])
+      elk_after_first[i, t] <- step(t - elk_first_seen[i] - 0.5)
+      elk_survive_to_t[i, t] <- elk_z[i, t - 1] * elk_phi[i, t]
+      
+      elk_gamma[i, t] <- elk_is_first[i, t] +
+        elk_after_first[i, t] * (1 - elk_is_first[i, t]) * elk_survive_to_t[i, t]
+      
+      elk_z[i, t] ~ dbern(elk_gamma[i, t])
     }
     
     for (t in 1:n_years) {
@@ -246,26 +248,30 @@ icm_code <- nimbleCode({
     }
   }
   
-  # elk calf survival 
+  # elk calf survival
   for (t in 1:(n_years - 1)) {
-    elk_CCR_c_fromYoungCows[t] ~ dbin(elk_f_ya[t] * elk_s_c[t], elk_CCR_cow_youngadult[t])
-    elk_CCR_c_fromOldCows[t] ~ dbin(elk_f_oa[t] * elk_s_c[t], elk_CCR_cow_oldadult[t])
+    elk_CCR_prob_young[t] <- elk_f_ya[t] * elk_s_c[t]
+    elk_CCR_prob_old[t] <- elk_f_oa[t] * elk_s_c[t]
+    
+    elk_CCR_c_fromYoungCows[t] ~ dbin(elk_CCR_prob_young[t], elk_CCR_cow_youngadult[t])
+    elk_CCR_c_fromOldCows[t] ~ dbin(elk_CCR_prob_old[t], elk_CCR_cow_oldadult[t])
+    
     elk_CCR_c[t] <- elk_CCR_c_fromYoungCows[t] + elk_CCR_c_fromOldCows[t]
   }
   
-  # elk pregnancy 
+  # elk pregnancy
   for (t in 1:(n_years - 1)) {
     elk_young_num_preg[t] ~ dbin(elk_f_ya[t], elk_young_num_capt[t])
     elk_old_num_preg[t] ~ dbin(elk_f_oa[t], elk_old_num_capt[t])
   }
   
-  # elk growth (p_13)
+  # elk growth
   for (t in 1:n_years) {
-    elk_harvested_13yo[t] ~ dbinom(elk_p_13[t], elk_harvested_ya[t])
+    elk_harvested_13yo[t] ~ dbin(elk_p_13[t], elk_harvested_ya[t])
   }
   
   ############################ WOLF SUBMODEL ###############################
-
+  
   # wolf priors
   for (t in 1:n_years) {
     logit(wolf_s_p[t]) ~ dnorm(qlogis(0.5), 1 / 0.5^2)
@@ -282,15 +288,19 @@ icm_code <- nimbleCode({
   wolf_lambda_init_a ~ dgamma(10, 1)
   wolf_N_a[1] ~ dpois(wolf_lambda_init_a)
   
+  # initial pup process / observation
+  wolf_lambda_p_sum[1] <- wolf_f[1] * wolf_N_a[1]
+  wolf_obs_p_sum[1] ~ dpois(max(1e-6, wolf_lambda_p_sum[1]))
+  
+  # latent pup abundance from observed summer pups
   for (t in 1:n_years) {
     wolf_N_p[t] ~ dbin(wolf_s_p[t], wolf_obs_p_sum[t])
     wolf_N_tot[t] <- wolf_N_p[t] + wolf_N_a[t]
     wolf_obs_tot[t] ~ dlnorm(log(wolf_N_tot[t] + 1e-6), wolf_tau_obs)
   }
   
-  # wolf state-space 
+  # wolf state-space
   for (t in 1:(n_years - 1)) {
-    
     wolf_mu_a[t + 1] <- wolf_N_p[t] + wolf_s_a[t] * wolf_N_a[t]
     wolf_N_a[t + 1] ~ dpois(max(1e-6, wolf_mu_a[t + 1]))
     
@@ -311,12 +321,14 @@ icm_code <- nimbleCode({
         wolf_is_class2[i, t - 1] * wolf_s_a[t - 1] +
         1e-10
       
-      wolf_z[i, t] ~ dbern(
-        equals(t, wolf_first_seen[i]) +
-          step(t - wolf_first_seen[i] - 0.5) *
-          (1 - equals(t, wolf_first_seen[i])) *
-          wolf_z[i, t - 1] * wolf_phi[i, t]
-      )
+      wolf_is_first[i, t] <- equals(t, wolf_first_seen[i])
+      wolf_after_first[i, t] <- step(t - wolf_first_seen[i] - 0.5)
+      wolf_survive_to_t[i, t] <- wolf_z[i, t - 1] * wolf_phi[i, t]
+      
+      wolf_gamma[i, t] <- wolf_is_first[i, t] +
+        wolf_after_first[i, t] * (1 - wolf_is_first[i, t]) * wolf_survive_to_t[i, t]
+      
+      wolf_z[i, t] ~ dbern(wolf_gamma[i, t])
     }
     
     for (t in 1:n_years) {
@@ -324,16 +336,9 @@ icm_code <- nimbleCode({
     }
   }
   
-  ##########################################################################
-  ######################## COMMUNITY HOOKS #################################
-  ##########################################################################
+  ######################## COMMUNITY LINK ##################################
+  # empty for now
   
-  # This section is just for derived quantities right now.
-  # Once you're ready for true coupling, this is where you can connect the systems.
-  
-  for (t in 1:n_years) {
-    wolf_to_elk_ratio[t] <- wolf_N_tot[t] / (elk_N_female[t] + 1e-6)
-  }
 })
 
 ################################################################################
