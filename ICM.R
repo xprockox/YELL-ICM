@@ -560,7 +560,7 @@ icm_mod <- nimbleMCMC(
 )
 
 # SAVE OUTPUT
-stop('The following line will overwrite data. Are you sure you would like to proceed?')
+#stop('The following line will overwrite data. Are you sure you would like to proceed?')
 save.image('ICM_environment_2026-03-26.RData')
 
 ################################################################################
@@ -821,10 +821,7 @@ elk_vrate_plot
 ###########--------- Plotting wolf abundance posteriors -------#################
 ################################################################################
 
-wolf_N_summ <- MCMCsummary(
-  icm_clean,
-  params = c("wolf_N_p", "wolf_N_a", "wolf_N_tot")
-) %>%
+wolf_N_summ <- wolf_N_summ %>%
   as.data.frame() %>%
   rownames_to_column("param") %>%
   mutate(
@@ -889,10 +886,7 @@ wolf_validation_plot
 ##########--------- Plotting wolf vital rate posteriors -------#################
 ################################################################################
 
-wolf_vrates <- MCMCsummary(
-  icm_clean,
-  params = c("wolf_s_p", "wolf_s_a", "wolf_f")
-) %>%
+wolf_vrates <- wolf_vrates %>%
   as.data.frame() %>%
   rownames_to_column("param") %>%
   rename(mean = mean, low = `2.5%`, high = `97.5%`)
