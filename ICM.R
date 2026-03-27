@@ -608,16 +608,6 @@ icm_clean <- mcmc.list(lapply(mats2, function(M) {
 # quick check
 round(MCMCsummary(icm_clean, params = "all"), 2)
 
-# -----------------------------------------------------------------------------
-# helper function to extract indexed parameters like elk_N_female[1], [2], ...
-# -----------------------------------------------------------------------------
-extract_indexed_param <- function(summary_df, param_base) {
-  summary_df %>%
-    filter(str_detect(param, paste0("^", param_base, "\\["))) %>%
-    mutate(year_index = as.integer(str_extract(param, "(?<=\\[)\\d+(?=\\])"))) %>%
-    arrange(year_index)
-}
-
 ################################################################################
 ###########------------ Checking model convergence ------------#################
 ################################################################################
