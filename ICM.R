@@ -15,6 +15,7 @@ library(ggplot2)
 library(nimble)
 library(coda)
 library(stringr)
+library(cowplot)
 
 #
 ##
@@ -185,28 +186,23 @@ icm_code <- nimbleCode({
     # elk_s_c[22],elk_s_c[23],elk_s_c[24],elk_s_c[25],elk_s_c[26],elk_s_c[27],
     # elk_s_c[28],elk_s_c[29].
     
-    logit(elk_s_ya[t]) ~ dnorm(qlogis(0.90), 1 / 0.5^2)
-    logit(elk_s_oa[t]) ~ dnorm(qlogis(0.80), 1 / 0.5^2)
+    logit(elk_s_ya[t]) ~ dnorm(qlogis(0.90), 1 / 0.5^2) # mean survival = 0.9
+    logit(elk_s_oa[t]) ~ dnorm(qlogis(0.80), 1 / 0.5^2) # mean survival = 0.8
     logit(elk_p_13[t]) ~ dnorm(qlogis(0.15), 1 / 0.5^2)
   }
   
   for (t in 1:(n_years - 1)) {
-    elk_f_ya[t] ~ dbeta(1, 1)
+    elk_f_ya[t] ~ dbeta(1, 1) # assume elk cows can't have more than 1 calf each (f is bounded 0-1)
     elk_f_oa[t] ~ dbeta(1, 1)
   }
   
   elk_sigma_obs_female ~ dunif(0.05, 2)
   elk_tau_obs_female <- 1 / (elk_sigma_obs_female^2)
   
-  elk_lambda_init_1y ~ dgamma(11.1, 0.00454)
-  elk_lambda_init_ya ~ dgamma(11.1, 0.00118)
-  elk_lambda_init_oa ~ dgamma(11.1, 0.0111)
-  elk_lambda_init_female ~ dgamma(11.1, 0.000863)
-  
   # elk initial values
-  elk_N_1y[1] ~ dpois(elk_lambda_init_1y)
-  elk_N_ya[1] ~ dpois(elk_lambda_init_ya)
-  elk_N_oa[1] ~ dpois(elk_lambda_init_oa)
+  elk_N_1y[1] ~ dpois(2500) # mean values from rough estimations
+  elk_N_ya[1] ~ dpois(10000) # using total abundance and classification (cow:calf) data
+  elk_N_oa[1] ~ dpois(1000) # and hunter harvest (age) data for prop young vs. old adults
   
   elk_N_female[1] <- elk_N_1y[1] + elk_N_ya[1] + elk_N_oa[1]
   elk_obs_female[1] ~ dlnorm(log(elk_N_female[1] + 1e-6), elk_tau_obs_female)
@@ -261,8 +257,8 @@ icm_code <- nimbleCode({
   
   # elk calf survival
   for (t in 1:(n_years - 1)) {
-    elk_CCR_prob_young[t] <- elk_f_ya[t] * elk_s_c[t]
-    elk_CCR_prob_old[t] <- elk_f_oa[t] * elk_s_c[t]
+    elk_CCR_prob_young[t] <- elk_f_ya[t] * elk_s_c[t] # elk calf survival is the same between
+    elk_CCR_prob_old[t] <- elk_f_oa[t] * elk_s_c[t]   # young and old cows
     
     elk_CCR_c_fromYoungCows[t] ~ dbin(elk_CCR_prob_young[t], elk_CCR_cow_youngadult[t])
     elk_CCR_c_fromOldCows[t] ~ dbin(elk_CCR_prob_old[t], elk_CCR_cow_oldadult[t])
@@ -285,23 +281,22 @@ icm_code <- nimbleCode({
   
   # wolf priors
   for (t in 1:n_years) {
-    logit(wolf_s_p[t]) ~ dnorm(qlogis(0.5), 1 / 0.5^2)
-    logit(wolf_s_a[t]) ~ dnorm(qlogis(0.9), 1 / 0.5^2)
+    logit(wolf_s_p[t]) ~ dnorm(qlogis(0.5), 1 / 0.5^2) # mean pup survival = 0.5
+    logit(wolf_s_a[t]) ~ dnorm(qlogis(0.9), 1 / 0.5^2) # mean adult survival = 0.9
   }
   
   for (t in 1:(n_years - 1)) {
-    wolf_f[t] ~ dbeta(1, 1)
+    wolf_f[t] ~ dgamma(1, 1) # positive value with mean = 1
   }
   
   wolf_sigma_obs ~ dunif(0.05, 2)
   wolf_tau_obs <- 1 / (wolf_sigma_obs^2)
   
-  wolf_lambda_init_a ~ dgamma(10, 1)
-  wolf_N_a[1] ~ dpois(wolf_lambda_init_a)
+  wolf_N_a[1] ~ dpois(14) # 14 wolves released first year
   
   # initial pup process / observation
   wolf_lambda_p_sum[1] <- wolf_f[1] * wolf_N_a[1]
-  wolf_obs_p_sum[1] ~ dpois(max(1e-6, wolf_lambda_p_sum[1]))
+  wolf_obs_p_sum[1] ~ dpois(wolf_lambda_p_sum[1])
   
   # latent pup abundance from observed summer pups
   for (t in 1:n_years) {
@@ -493,10 +488,6 @@ make_icm_inits <- function() {
     elk_f_ya = rep(0.76, n_years - 1),
     elk_f_oa = rep(0.64, n_years - 1),
     elk_sigma_obs_female = 0.30,
-    elk_lambda_init_1y = max(1, round(elk_init_N1y[1])),
-    elk_lambda_init_ya = max(1, round(elk_init_Nya[1])),
-    elk_lambda_init_oa = max(1, round(elk_init_Noa[1])),
-    elk_lambda_init_female = max(1, round(elk_init_N1y[1] + elk_init_Nya[1] + elk_init_Noa[1])),
     elk_N_1y = pmax(1, elk_init_N1y),
     elk_N_ya = pmax(1, elk_init_Nya),
     elk_N_oa = pmax(1, elk_init_Noa),
@@ -506,9 +497,8 @@ make_icm_inits <- function() {
     # wolf
     wolf_s_p = rep(0.5, n_years),
     wolf_s_a = rep(0.9, n_years),
-    wolf_f = rep(0.5, n_years - 1),
+    wolf_f = rep(1.0, n_years - 1),
     wolf_sigma_obs = 0.2,
-    wolf_lambda_init_a = max(1, wolf_init_Na[1]),
     wolf_N_p = wolf_init_Np,
     wolf_N_a = wolf_init_Na,
     wolf_p_det = runif(n_years, 0.6, 0.95),
@@ -542,8 +532,8 @@ icm_params <- c(
 
 set.seed(17)
 nc <- 3
-ni <- 1000000
-nb <- 200000
+ni <- 100000
+nb <- 20000
 th <- 4
 
 icm_mod <- nimbleMCMC(
@@ -561,7 +551,9 @@ icm_mod <- nimbleMCMC(
 
 # SAVE OUTPUT
 #stop('The following line will overwrite data. Are you sure you would like to proceed?')
-save.image('ICM_environment_2026-03-26.RData')
+#save.image('data/outputs/ICM_environment_2026-03-26.RData')
+
+load('data/outputs/ICM_environment_2026-03-26.RData')
 
 ################################################################################
 ###########--------------------- Results ----------------------#################
@@ -667,6 +659,20 @@ bad_wolf_vrate_rhats <- data.frame(
 
 bad_wolf_vrate_rhats <- bad_wolf_vrate_rhats[bad_wolf_vrate_rhats$Rhat > 1.1, ]
 bad_wolf_vrate_rhats
+
+# regression coefficients
+reg_coefs <- MCMCsummary(
+  icm_clean,
+  params = c("beta0", 'beta1')
+) 
+
+bad_reg_coefs <- data.frame(
+  param = rownames(reg_coefs),
+  Rhat = reg_coefs[, "Rhat"]
+)
+
+bad_reg_coefs <- bad_reg_coefs[bad_reg_coefs$Rhat > 1.1, ]
+bad_reg_coefs
 
 ################################################################################
 ###########--------- Plotting elk abundance posteriors --------#################
@@ -927,3 +933,124 @@ wolf_vrate_plot <- ggplot(wolf_vrates2, aes(x = year, y = mean)) +
 wolf_vrate_plot
 
 ################################################################################
+##########---------- Regression plot + coefficient densities ---------##########
+################################################################################
+
+# combine chains into one matrix
+post_mat <- do.call(rbind, lapply(icm_clean, as.matrix))
+
+# x values from posterior mean wolf abundance summaries (raw scale)
+wolf_reg_df <- wolf_N_summ %>%
+  filter(stage == "Total Wolves") %>%
+  transmute(
+    year,
+    wolf_N_tot = mean
+  )
+
+# y values from posterior mean elk calf survival summaries
+calf_surv_df <- elk_vrates2 %>%
+  filter(rate == "Calf survival (s_c)") %>%
+  select(year, elk_s_c = mean, elk_s_c_low = low, elk_s_c_high = high)
+
+# join the two for yearly points
+reg_points <- left_join(calf_surv_df, wolf_reg_df, by = "year")
+
+# grid of raw wolf abundance values for fitted regression line
+x_grid <- seq(
+  min(reg_points$wolf_N_tot, na.rm = TRUE),
+  max(reg_points$wolf_N_tot, na.rm = TRUE),
+  length.out = 200
+)
+
+# standardize internally for prediction
+x_grid_std <- (x_grid - icm_constants$wolf_tot_mean) / icm_constants$wolf_tot_sd
+
+# posterior fitted values across raw-scale x grid
+pred_mat <- sapply(x_grid_std, function(x) {
+  plogis(post_mat[, "beta0"] + post_mat[, "beta1"] * x)
+})
+
+# summarize fitted curve
+reg_curve <- data.frame(
+  wolf_N_tot = x_grid,
+  mean = apply(pred_mat, 2, mean),
+  low = apply(pred_mat, 2, quantile, probs = 0.025),
+  high = apply(pred_mat, 2, quantile, probs = 0.975)
+)
+
+# main regression plot
+regression_plot <- ggplot() +
+  geom_ribbon(
+    data = reg_curve,
+    aes(x = wolf_N_tot, ymin = low, ymax = high),
+    fill = "#6F263D",
+    alpha = 0.5
+  ) +
+  geom_line(
+    data = reg_curve,
+    aes(x = wolf_N_tot, y = mean),
+    linewidth = 1
+  ) +
+  geom_errorbar(
+    data = reg_points,
+    aes(x = wolf_N_tot, ymin = elk_s_c_low, ymax = elk_s_c_high),
+    width = 0
+  ) +
+  geom_point(
+    data = reg_points,
+    aes(x = wolf_N_tot, y = elk_s_c),
+    shape = 21,
+    fill = "gold",
+    color = 'black',
+    size = 2
+  ) +
+  theme_classic() +
+  labs(
+    x = "Wolf abundance",
+    y = "Elk calf survival",
+    title = "Estimated effect of wolf abundance on elk calf survival",
+    #subtitle = "Line = posterior mean regression, ribbon = 95% credible interval"
+  )
+
+# posterior densities of coefficients
+beta_df <- data.frame(
+  beta0 = post_mat[, "beta0"],
+  beta1 = post_mat[, "beta1"]
+)
+
+beta0_plot <- ggplot(beta_df, aes(x = beta0)) +
+  geom_density(fill = "#236192", alpha = 0.4) +
+  theme_classic() +
+  labs(
+    x = "beta0",
+    y = "Density",
+    title = "Posterior of intercept"
+  )
+
+beta1_plot <- ggplot(beta_df, aes(x = beta1)) +
+  geom_density(fill = "#236192", alpha = 0.4) +
+  theme_classic() +
+  labs(
+    x = "beta1",
+    y = "Density",
+    title = "Posterior of wolf effect"
+  )
+
+# combine into one figure
+bottom_row <- plot_grid(
+  beta0_plot,
+  beta1_plot,
+  ncol = 2,
+  labels = c("B", "C")
+)
+
+final_reg_plot <- plot_grid(
+  regression_plot,
+  bottom_row,
+  ncol = 1,
+  rel_heights = c(2, 1),
+  labels = c("A", "")
+)
+
+final_reg_plot
+
