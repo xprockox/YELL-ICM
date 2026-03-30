@@ -281,37 +281,35 @@ icm_code <- nimbleCode({
   
   # wolf priors
   for (t in 1:n_years) {
-    logit(wolf_s_p[t]) ~ dnorm(qlogis(0.5), 1 / 0.5^2) # mean pup survival = 0.5
-    logit(wolf_s_a[t]) ~ dnorm(qlogis(0.9), 1 / 0.5^2) # mean adult survival = 0.9
-  }
-  
-  for (t in 1:(n_years - 1)) {
-    wolf_f[t] ~ dgamma(1, 1) # positive value with mean = 1
+    logit(wolf_s_p[t]) ~ dnorm(qlogis(0.5), 1 / 0.5^2) # mean = 0.5
+    logit(wolf_s_a[t]) ~ dnorm(qlogis(0.9), 1 / 0.5^2) # mean = 0.9
+    wolf_f[t] ~ dgamma(2, 2)   # mean = 1, but tighter than gamma(1,1)
   }
   
   wolf_sigma_obs ~ dunif(0.05, 2)
   wolf_tau_obs <- 1 / (wolf_sigma_obs^2)
   
-  wolf_N_a[1] ~ dpois(14) # 14 wolves released first year
+  wolf_N_a[1] ~ dpois(14) # 14 wolves originally introduced the first year
   
-  # initial pup process / observation
-  wolf_lambda_p_sum[1] <- wolf_f[1] * wolf_N_a[1]
-  wolf_obs_p_sum[1] ~ dpois(wolf_lambda_p_sum[1])
-  
-  # latent pup abundance from observed summer pups
   for (t in 1:n_years) {
-    wolf_N_p[t] ~ dbin(wolf_s_p[t], wolf_obs_p_sum[t])
+    
+    # expected summer pups
+    wolf_N_p_sum[t] ~ dpois(max(1e-6, wolf_f[t] * wolf_N_a[t]))
+
+    # observed summer pup counts
+    wolf_obs_p_sum[t] ~ dpois(max(1e-6, wolf_N_p_sum[t]))
+    
+    # summer pups surviving to December
+    wolf_N_p[t] ~ dbin(wolf_s_p[t], wolf_N_p_sum[t])
+    
+    # December total
     wolf_N_tot[t] <- wolf_N_p[t] + wolf_N_a[t]
     wolf_obs_tot[t] ~ dlnorm(log(wolf_N_tot[t] + 1e-6), wolf_tau_obs)
   }
-
-  # wolf state-space
+  
   for (t in 1:(n_years - 1)) {
     wolf_mu_a[t + 1] <- wolf_N_p[t] + wolf_s_a[t] * wolf_N_a[t]
     wolf_N_a[t + 1] ~ dpois(max(1e-6, wolf_mu_a[t + 1]))
-    
-    wolf_lambda_p_sum[t + 1] <- wolf_f[t] * wolf_N_a[t]
-    wolf_obs_p_sum[t + 1] ~ dpois(max(1e-6, wolf_lambda_p_sum[t + 1]))
   }
   
   # wolf CJS
@@ -497,8 +495,9 @@ make_icm_inits <- function() {
     # wolf
     wolf_s_p = rep(0.5, n_years),
     wolf_s_a = rep(0.9, n_years),
-    wolf_f = rep(1.0, n_years - 1),
+    wolf_f = rep(1.0, n_years),
     wolf_sigma_obs = 0.2,
+    wolf_N_p_sum = pmax(1, round(wolf_pop$summer_pups)),
     wolf_N_p = wolf_init_Np,
     wolf_N_a = wolf_init_Na,
     wolf_p_det = runif(n_years, 0.6, 0.95),
@@ -520,7 +519,7 @@ icm_params <- c(
   # wolf
   "wolf_s_p", "wolf_s_a", "wolf_f",
   "wolf_p_det",
-  "wolf_N_p", "wolf_N_a", "wolf_N_tot",
+  "wolf_N_p_sum", "wolf_N_p", "wolf_N_a", "wolf_N_tot",
   
   # regression coefficients
   'beta0', 'beta1'
@@ -532,8 +531,8 @@ icm_params <- c(
 
 set.seed(17)
 nc <- 3
-ni <- 100000
-nb <- 20000
+ni <- 1000
+nb <- 200
 th <- 4
 
 icm_mod <- nimbleMCMC(
@@ -551,9 +550,9 @@ icm_mod <- nimbleMCMC(
 
 # SAVE OUTPUT
 #stop('The following line will overwrite data. Are you sure you would like to proceed?')
-#save.image('data/outputs/ICM_environment_2026-03-26.RData')
+save.image('data/outputs/ICM_environment_2026-03-27.RData')
 
-load('data/outputs/ICM_environment_2026-03-26.RData')
+#load('data/outputs/ICM_environment_2026-03-26.RData')
 
 ################################################################################
 ###########--------------------- Results ----------------------#################
