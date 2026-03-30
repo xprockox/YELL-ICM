@@ -550,9 +550,9 @@ icm_mod <- nimbleMCMC(
 
 # SAVE OUTPUT
 #stop('The following line will overwrite data. Are you sure you would like to proceed?')
-save.image('data/outputs/ICM_environment_2026-03-27.RData')
+#save.image('data/outputs/ICM_environment_2026-03-30.RData')
 
-#load('data/outputs/ICM_environment_2026-03-26.RData')
+load('data/outputs/ICM_environment_2026-03-30.RData')
 
 ################################################################################
 ###########--------------------- Results ----------------------#################
@@ -834,7 +834,7 @@ wolf_N_summ <- wolf_N_summ %>%
   ))
 
 wolf_dat_long <- wolf_pop %>%
-  select(seasonal.year, summer_pups, dec_adults, total_abundance) %>%
+  select(seasonal.year, dec_pups, dec_adults, total_abundance) %>%
   rename(year = seasonal.year) %>%
   pivot_longer(
     cols = -c(year),
@@ -843,7 +843,7 @@ wolf_dat_long <- wolf_pop %>%
   ) %>%
   mutate(stage = recode(
     stage,
-    "summer_pups" = "Pups",
+    "dec_pups" = "Pups",
     "dec_adults" = "Adults",
     "total_abundance" = "Total Wolves"
   ))
@@ -935,80 +935,79 @@ wolf_vrate_plot
 ##########---------- Regression plot + coefficient densities ---------##########
 ################################################################################
 
-# combine chains into one matrix
-post_mat <- do.call(rbind, lapply(icm_clean, as.matrix))
-
-# x values from posterior mean wolf abundance summaries (raw scale)
-wolf_reg_df <- wolf_N_summ %>%
+# yearly wolf abundance summaries
+wolf_pts <- wolf_N_summ %>%
   filter(stage == "Total Wolves") %>%
   transmute(
     year,
-    wolf_N_tot = mean
+    wolf_N_tot = mean,
+    wolf_low = low,
+    wolf_high = high
   )
 
-# y values from posterior mean elk calf survival summaries
-calf_surv_df <- elk_vrates2 %>%
+# yearly elk calf survival summaries
+elk_pts <- elk_vrates2 %>%
   filter(rate == "Calf survival (s_c)") %>%
-  select(year, elk_s_c = mean, elk_s_c_low = low, elk_s_c_high = high)
+  transmute(
+    year,
+    elk_s_c = mean,
+    elk_low = low,
+    elk_high = high
+  )
 
-# join the two for yearly points
-reg_points <- left_join(calf_surv_df, wolf_reg_df, by = "year")
+# combine into one plotting dataframe
+plot_df <- left_join(wolf_pts, elk_pts, by = "year")
 
-# grid of raw wolf abundance values for fitted regression line
+# posterior draws from cleaned chains
+post_mat <- do.call(rbind, lapply(icm_clean, as.matrix))
+
+# x grid on raw wolf abundance scale
 x_grid <- seq(
-  min(reg_points$wolf_N_tot, na.rm = TRUE),
-  max(reg_points$wolf_N_tot, na.rm = TRUE),
+  min(plot_df$wolf_N_tot, na.rm = TRUE),
+  max(plot_df$wolf_N_tot, na.rm = TRUE),
   length.out = 200
 )
 
-# standardize internally for prediction
+# standardize internally because model used standardized wolf abundance
 x_grid_std <- (x_grid - icm_constants$wolf_tot_mean) / icm_constants$wolf_tot_sd
 
-# posterior fitted values across raw-scale x grid
+# fitted values for every posterior draw across x grid
 pred_mat <- sapply(x_grid_std, function(x) {
   plogis(post_mat[, "beta0"] + post_mat[, "beta1"] * x)
 })
 
-# summarize fitted curve
-reg_curve <- data.frame(
+# summarize into mean and 95% credible ribbon
+line_df <- data.frame(
   wolf_N_tot = x_grid,
-  mean = apply(pred_mat, 2, mean),
-  low = apply(pred_mat, 2, quantile, probs = 0.025),
-  high = apply(pred_mat, 2, quantile, probs = 0.975)
+  elk_s_c = apply(pred_mat, 2, mean),
+  elk_low = apply(pred_mat, 2, quantile, probs = 0.025),
+  elk_high = apply(pred_mat, 2, quantile, probs = 0.975)
 )
 
-# main regression plot
-regression_plot <- ggplot() +
+# main plot with ribbon
+main_plot <- ggplot(plot_df, aes(x = wolf_N_tot, y = elk_s_c)) +
   geom_ribbon(
-    data = reg_curve,
-    aes(x = wolf_N_tot, ymin = low, ymax = high),
+    data = line_df,
+    aes(x = wolf_N_tot, ymin = elk_low, ymax = elk_high),
+    inherit.aes = FALSE,
     fill = "#6F263D",
-    alpha = 0.5
+    alpha = 0.25
   ) +
   geom_line(
-    data = reg_curve,
-    aes(x = wolf_N_tot, y = mean),
+    data = line_df,
+    aes(x = wolf_N_tot, y = elk_s_c),
+    inherit.aes = FALSE,
+    color = "#6F263D",
     linewidth = 1
   ) +
-  geom_errorbar(
-    data = reg_points,
-    aes(x = wolf_N_tot, ymin = elk_s_c_low, ymax = elk_s_c_high),
-    width = 0
-  ) +
-  geom_point(
-    data = reg_points,
-    aes(x = wolf_N_tot, y = elk_s_c),
-    shape = 21,
-    fill = "gold",
-    color = 'black',
-    size = 2
-  ) +
+  geom_errorbar(aes(ymin = elk_low, ymax = elk_high), width = 0) +
+  geom_errorbarh(aes(xmin = wolf_low, xmax = wolf_high), height = 0) +
+  geom_point(shape = 21, fill = "gold", color = "black", size = 2.5) +
   theme_classic() +
   labs(
     x = "Wolf abundance",
     y = "Elk calf survival",
-    title = "Estimated effect of wolf abundance on elk calf survival",
-    #subtitle = "Line = posterior mean regression, ribbon = 95% credible interval"
+    title = "Elk calf survival vs. wolf abundance"
   )
 
 # posterior densities of coefficients
@@ -1018,7 +1017,7 @@ beta_df <- data.frame(
 )
 
 beta0_plot <- ggplot(beta_df, aes(x = beta0)) +
-  geom_density(fill = "#236192", alpha = 0.4) +
+  geom_density(fill = "#236192", alpha = 0.45) +
   theme_classic() +
   labs(
     x = "beta0",
@@ -1027,7 +1026,8 @@ beta0_plot <- ggplot(beta_df, aes(x = beta0)) +
   )
 
 beta1_plot <- ggplot(beta_df, aes(x = beta1)) +
-  geom_density(fill = "#236192", alpha = 0.4) +
+  geom_density(fill = "#236192", alpha = 0.45) +
+  geom_vline(xintercept = 0, linetype = 2) +
   theme_classic() +
   labs(
     x = "beta1",
@@ -1035,7 +1035,7 @@ beta1_plot <- ggplot(beta_df, aes(x = beta1)) +
     title = "Posterior of wolf effect"
   )
 
-# combine into one figure
+# combine bottom row
 bottom_row <- plot_grid(
   beta0_plot,
   beta1_plot,
@@ -1043,13 +1043,13 @@ bottom_row <- plot_grid(
   labels = c("B", "C")
 )
 
-final_reg_plot <- plot_grid(
-  regression_plot,
+# final combined figure
+final_plot <- plot_grid(
+  main_plot,
   bottom_row,
   ncol = 1,
   rel_heights = c(2, 1),
   labels = c("A", "")
 )
 
-final_reg_plot
-
+final_plot
