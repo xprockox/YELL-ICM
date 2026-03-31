@@ -175,19 +175,11 @@ icm_code <- nimbleCode({
   for (t in 1:n_years) {
     
     # logit(elk_s_c[t]) ~ dnorm(qlogis(0.22), 1 / 0.5^2) 
+    # logit(elk_s_ya[t]) ~ dnorm(qlogis(0.90), 1 / 0.5^2) # mean survival = 0.9
+    # logit(elk_s_oa[t]) ~ dnorm(qlogis(0.80), 1 / 0.5^2) # mean survival = 0.8
     
-    # ^ This is commented out so the regression at the bottom can run.
+    # ^ These are commented out so the regressions at the bottom can run.
     
-    # Previous error:
-    # Error: There are multiple definitions for node(s): elk_s_c[1],elk_s_c[2],
-    # elk_s_c[3],elk_s_c[4],elk_s_c[5],elk_s_c[6],elk_s_c[7],elk_s_c[8],elk_s_c[9],
-    # elk_s_c[10],elk_s_c[11],elk_s_c[12],elk_s_c[13],elk_s_c[14],elk_s_c[15],
-    # elk_s_c[16],elk_s_c[17],elk_s_c[18],elk_s_c[19],elk_s_c[20],elk_s_c[21],
-    # elk_s_c[22],elk_s_c[23],elk_s_c[24],elk_s_c[25],elk_s_c[26],elk_s_c[27],
-    # elk_s_c[28],elk_s_c[29].
-    
-    logit(elk_s_ya[t]) ~ dnorm(qlogis(0.90), 1 / 0.5^2) # mean survival = 0.9
-    logit(elk_s_oa[t]) ~ dnorm(qlogis(0.80), 1 / 0.5^2) # mean survival = 0.8
     logit(elk_p_13[t]) ~ dnorm(qlogis(0.15), 1 / 0.5^2)
   }
   
@@ -343,8 +335,13 @@ icm_code <- nimbleCode({
   ##########---------------- REGRESSIONS ----------------#############
   
   # Priors
-  beta0 ~ dnorm(0, sd=sqrt(1/0.33))
-  beta1 ~ dnorm(0, sd=sqrt(1/0.33))
+  beta0_calfSurv ~ dnorm(qlogis(0.22), 1 / 0.5^2) # centered on 0.22
+  beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.5^2) # centered on 0.90
+  beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.5^2) # centered on 0.80
+  
+  beta1_calfSurv ~ dnorm(0, sd=sqrt(1/0.33))
+  beta1_yaSurv ~ dnorm(0, sd=sqrt(1/0.33))
+  beta1_oaSurv ~ dnorm(0, sd=sqrt(1/0.33))
   
   # Likelihood
   for (t in 1:n_years){
@@ -352,8 +349,10 @@ icm_code <- nimbleCode({
     # first standardize wolf abundance
     wolf_N_tot_std[t] <- (wolf_N_tot[t] - wolf_tot_mean) / wolf_tot_sd
     
-    # then build regression model
-    logit(elk_s_c[t]) <- beta0 + beta1*wolf_N_tot_std[t] 
+    # then build regression models
+    logit(elk_s_c[t]) <- beta0_calfSurv + beta1_calfSurv*wolf_N_tot_std[t] 
+    logit(elk_s_ya[t]) <- beta0_yaSurv + beta1_yaSurv*wolf_N_tot_std[t] 
+    logit(elk_s_oa[t]) <- beta0_oaSurv + beta1_oaSurv*wolf_N_tot_std[t] 
   }
 })
 
@@ -522,7 +521,9 @@ icm_params <- c(
   "wolf_N_p_sum", "wolf_N_p", "wolf_N_a", "wolf_N_tot",
   
   # regression coefficients
-  'beta0', 'beta1'
+  'beta0_calfSurv', 'beta1_calfSurv',
+  'beta0_yaSurv', 'beta1_yaSurv',
+  'beta0_oaSurv', 'beta1_oaSurv'
 )
 
 ################################################################################
