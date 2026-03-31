@@ -334,25 +334,41 @@ icm_code <- nimbleCode({
   
   ##########---------------- REGRESSIONS ----------------#############
   
-  # Priors
-  beta0_calfSurv ~ dnorm(qlogis(0.22), 1 / 0.5^2) # centered on 0.22
-  beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.5^2) # centered on 0.90
-  beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.5^2) # centered on 0.80
+  # Priors for regression coefficients
+  beta0_calfSurv ~ dnorm(qlogis(0.22), 1 / 0.5^2) # mean = 0.22
+  beta1_calfSurv ~ dnorm(0, 1 / 1^2)
   
-  beta1_calfSurv ~ dnorm(0, sd=sqrt(1/0.33))
-  beta1_yaSurv ~ dnorm(0, sd=sqrt(1/0.33))
-  beta1_oaSurv ~ dnorm(0, sd=sqrt(1/0.33))
+  beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.5^2) # mean = 0.90
+  beta1_yaSurv ~ dnorm(0, 1 / 1^2)
   
-  # Likelihood
-  for (t in 1:n_years){
+  beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.5^2) # mean = 0.80
+  beta1_oaSurv ~ dnorm(0, 1 / 1^2)
+  
+  # Priors for random year-effect SDs
+  sigma_calf ~ dunif(0, 2)
+  tau_calf <- 1 / (sigma_calf^2)
+  
+  sigma_ya ~ dunif(0, 2)
+  tau_ya <- 1 / (sigma_ya^2)
+  
+  sigma_oa ~ dunif(0, 2)
+  tau_oa <- 1 / (sigma_oa^2)
+  
+  # Year-specific regressions
+  for (t in 1:n_years) {
     
-    # first standardize wolf abundance
+    # random year effects
+    eps_s_c[t] ~ dnorm(0, tau_calf)
+    eps_s_ya[t] ~ dnorm(0, tau_ya)
+    eps_s_oa[t] ~ dnorm(0, tau_oa)
+    
+    # standardize wolf abundance
     wolf_N_tot_std[t] <- (wolf_N_tot[t] - wolf_tot_mean) / wolf_tot_sd
     
-    # then build regression models
-    logit(elk_s_c[t]) <- beta0_calfSurv + beta1_calfSurv*wolf_N_tot_std[t] 
-    logit(elk_s_ya[t]) <- beta0_yaSurv + beta1_yaSurv*wolf_N_tot_std[t] 
-    logit(elk_s_oa[t]) <- beta0_oaSurv + beta1_oaSurv*wolf_N_tot_std[t] 
+    # regression models
+    logit(elk_s_c[t])  <- beta0_calfSurv + beta1_calfSurv * wolf_N_tot_std[t] + eps_s_c[t]
+    logit(elk_s_ya[t]) <- beta0_yaSurv   + beta1_yaSurv   * wolf_N_tot_std[t] + eps_s_ya[t]
+    logit(elk_s_oa[t]) <- beta0_oaSurv   + beta1_oaSurv   * wolf_N_tot_std[t] + eps_s_oa[t]
   }
 })
 
@@ -478,9 +494,9 @@ make_icm_inits <- function() {
   
   list(
     # elk
-    elk_s_c = rep(0.22, n_years),
-    elk_s_ya = rep(0.90, n_years),
-    elk_s_oa = rep(0.80, n_years),
+    # elk_s_c = rep(0.22, n_years),
+    # elk_s_ya = rep(0.90, n_years),
+    # elk_s_oa = rep(0.80, n_years), ## removed these because they are deterministic in regressions
     elk_p_13 = rep(0.15, n_years),
     elk_f_ya = rep(0.76, n_years - 1),
     elk_f_oa = rep(0.64, n_years - 1),
@@ -523,7 +539,10 @@ icm_params <- c(
   # regression coefficients
   'beta0_calfSurv', 'beta1_calfSurv',
   'beta0_yaSurv', 'beta1_yaSurv',
-  'beta0_oaSurv', 'beta1_oaSurv'
+  'beta0_oaSurv', 'beta1_oaSurv',
+  
+  "sigma_calf", "sigma_ya", "sigma_oa",
+  "eps_s_c", "eps_s_ya", "eps_s_oa"
 )
 
 ################################################################################
@@ -598,7 +617,7 @@ icm_clean <- mcmc.list(lapply(mats2, function(M) {
 }))
 
 # quick check
-round(MCMCsummary(icm_clean, params = "all"), 2)
+# round(MCMCsummary(icm_clean, params = "all"), 2)
 
 ################################################################################
 ###########------------ Checking model convergence ------------#################
@@ -1105,6 +1124,7 @@ beta_long$parameter <- factor(
 # generate coefficient estimate density plots
 coef_plot <- ggplot(beta_long, aes(x = value)) +
   geom_density(fill = "#236192", alpha = 0.45) +
+  geom_vline(xintercept = 0, linetype = 2) +
   facet_wrap(~parameter, scales = "free", ncol = 2) +
   theme_classic() +
   labs(
