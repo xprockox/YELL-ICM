@@ -16,6 +16,7 @@ library(nimble)
 library(coda)
 library(stringr)
 library(cowplot)
+library(popbio)
 
 #
 ##
@@ -1147,3 +1148,57 @@ final_plot <- plot_grid(
 
 # view final plot
 final_plot
+
+################################################################################
+##########------------------ Elasticity analysis ---------------------##########
+################################################################################
+
+# pull posterior mean elk vital rates by year
+elk_rates_wide <- elk_vrates2 %>%
+  filter(rate %in% c(
+    "Calf survival (s_c)",
+    "Young Adult survival (s_ya)",
+    "Old Adult survival (s_oa)",
+    "Young-Old transition (p_13)",
+    "Fecundity (young) (f_ya)",
+    "Fecundity (old) (f_oa)"
+  )) %>%
+  select(year, rate, mean) %>%
+  pivot_wider(names_from = rate, values_from = mean)
+
+# calculate matrix elasticities for each year
+elk_elasticity_list <- lapply(1:nrow(elk_rates_wide), function(i) {
+  
+  s_c <- elk_rates_wide$`Calf survival (s_c)`[i]
+  s_ya <- elk_rates_wide$`Young Adult survival (s_ya)`[i]
+  s_oa <- elk_rates_wide$`Old Adult survival (s_oa)`[i]
+  p_13 <- elk_rates_wide$`Young-Old transition (p_13)`[i]
+  f_ya <- elk_rates_wide$`Fecundity (young) (f_ya)`[i]
+  f_oa <- elk_rates_wide$`Fecundity (old) (f_oa)`[i]
+  
+  A <- matrix(
+    c(
+      0,      f_ya * s_c,          f_oa * s_c,
+      s_ya,   s_ya * (1 - p_13),   0,
+      0,      s_ya * p_13,         s_oa
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  
+  E <- popbio::elasticity(A)
+  lambda <- popbio::lambda(A)
+  
+  data.frame(
+    year = elk_rates_wide$year[i],
+    a12 = E[1, 2],
+    a13 = E[1, 3],
+    a21 = E[2, 1],
+    a22 = E[2, 2],
+    a32 = E[3, 2],
+    a33 = E[3, 3]
+  )
+})
+
+elk_elasticity_df <- bind_rows(elk_elasticity_list)
+elk_elasticity_df
