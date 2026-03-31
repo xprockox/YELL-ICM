@@ -532,8 +532,8 @@ icm_params <- c(
 
 set.seed(17)
 nc <- 3
-ni <- 1000
-nb <- 200
+ni <- 100000
+nb <- 20000
 th <- 4
 
 icm_mod <- nimbleMCMC(
@@ -553,7 +553,7 @@ icm_mod <- nimbleMCMC(
 #stop('The following line will overwrite data. Are you sure you would like to proceed?')
 #save.image('data/outputs/ICM_environment_2026-03-30.RData')
 
-load('data/outputs/ICM_environment_2026-03-30.RData')
+load('data/outputs/ICM_environment_2026-03-31.RData')
 
 ################################################################################
 ###########--------------------- Results ----------------------#################
