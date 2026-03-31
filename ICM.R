@@ -663,8 +663,12 @@ bad_wolf_vrate_rhats
 # regression coefficients
 reg_coefs <- MCMCsummary(
   icm_clean,
-  params = c("beta0", 'beta1')
-) 
+  params = c(
+    "beta0_calfSurv", "beta1_calfSurv",
+    "beta0_yaSurv", "beta1_yaSurv",
+    "beta0_oaSurv", "beta1_oaSurv"
+  )
+)
 
 bad_reg_coefs <- data.frame(
   param = rownames(reg_coefs),
@@ -933,7 +937,7 @@ wolf_vrate_plot <- ggplot(wolf_vrates2, aes(x = year, y = mean)) +
 wolf_vrate_plot
 
 ################################################################################
-##########---------- Regression plot + coefficient densities ---------##########
+##########---------- Regression plots + coefficient densities ---------##########
 ################################################################################
 
 # yearly wolf abundance summaries
@@ -946,20 +950,45 @@ wolf_pts <- wolf_N_summ %>%
     wolf_high = high
   )
 
-# yearly elk calf survival summaries
-elk_pts <- elk_vrates2 %>%
+# yearly elk survival summaries
+elk_calf_pts <- elk_vrates2 %>%
   filter(rate == "Calf survival (s_c)") %>%
   transmute(
     year,
-    elk_s_c = mean,
+    elk_surv = mean,
     elk_low = low,
-    elk_high = high
+    elk_high = high,
+    stage = "Calf survival"
   )
 
-# combine into one plotting dataframe
-plot_df <- left_join(wolf_pts, elk_pts, by = "year")
+elk_ya_pts <- elk_vrates2 %>%
+  filter(rate == "Young Adult survival (s_ya)") %>%
+  transmute(
+    year,
+    elk_surv = mean,
+    elk_low = low,
+    elk_high = high,
+    stage = "Young adult survival"
+  )
 
-# posterior draws from cleaned chains
+elk_oa_pts <- elk_vrates2 %>%
+  filter(rate == "Old Adult survival (s_oa)") %>%
+  transmute(
+    year,
+    elk_surv = mean,
+    elk_low = low,
+    elk_high = high,
+    stage = "Old adult survival"
+  )
+
+# combine elk survival summaries
+elk_surv_pts <- bind_rows(elk_calf_pts, elk_ya_pts, elk_oa_pts)
+
+# join elk and wolf estimates
+plot_df <- elk_surv_pts %>%
+  left_join(wolf_pts, by = "year")
+
+# pull posterior draws from cleaned chains
 post_mat <- do.call(rbind, lapply(icm_clean, as.matrix))
 
 # x grid on raw wolf abundance scale
@@ -972,21 +1001,50 @@ x_grid <- seq(
 # standardize internally because model used standardized wolf abundance
 x_grid_std <- (x_grid - icm_constants$wolf_tot_mean) / icm_constants$wolf_tot_sd
 
-# fitted values for every posterior draw across x grid
-pred_mat <- sapply(x_grid_std, function(x) {
-  plogis(post_mat[, "beta0"] + post_mat[, "beta1"] * x)
+# fitted values for calf survival
+pred_calf <- sapply(x_grid_std, function(x) {
+  plogis(post_mat[, "beta0_calfSurv"] + post_mat[, "beta1_calfSurv"] * x)
 })
 
-# summarize into mean and 95% credible ribbon
-line_df <- data.frame(
+line_calf <- data.frame(
   wolf_N_tot = x_grid,
-  elk_s_c = apply(pred_mat, 2, mean),
-  elk_low = apply(pred_mat, 2, quantile, probs = 0.025),
-  elk_high = apply(pred_mat, 2, quantile, probs = 0.975)
+  elk_surv = apply(pred_calf, 2, mean),
+  elk_low = apply(pred_calf, 2, quantile, probs = 0.025),
+  elk_high = apply(pred_calf, 2, quantile, probs = 0.975),
+  stage = "Calf survival"
 )
 
-# main plot with ribbon
-main_plot <- ggplot(plot_df, aes(x = wolf_N_tot, y = elk_s_c)) +
+# fitted values for young adult survival
+pred_ya <- sapply(x_grid_std, function(x) {
+  plogis(post_mat[, "beta0_yaSurv"] + post_mat[, "beta1_yaSurv"] * x)
+})
+
+line_ya <- data.frame(
+  wolf_N_tot = x_grid,
+  elk_surv = apply(pred_ya, 2, mean),
+  elk_low = apply(pred_ya, 2, quantile, probs = 0.025),
+  elk_high = apply(pred_ya, 2, quantile, probs = 0.975),
+  stage = "Young adult survival"
+)
+
+# fitted values for old adult survival
+pred_oa <- sapply(x_grid_std, function(x) {
+  plogis(post_mat[, "beta0_oaSurv"] + post_mat[, "beta1_oaSurv"] * x)
+})
+
+line_oa <- data.frame(
+  wolf_N_tot = x_grid,
+  elk_surv = apply(pred_oa, 2, mean),
+  elk_low = apply(pred_oa, 2, quantile, probs = 0.025),
+  elk_high = apply(pred_oa, 2, quantile, probs = 0.975),
+  stage = "Old adult survival"
+)
+
+# combine survival values from all stages
+line_df <- bind_rows(line_calf, line_ya, line_oa)
+
+# first plot: wolf abundance vs. all three stages' survival 
+main_plot <- ggplot(plot_df, aes(x = wolf_N_tot, y = elk_surv)) +
   geom_ribbon(
     data = line_df,
     aes(x = wolf_N_tot, ymin = elk_low, ymax = elk_high),
@@ -996,7 +1054,7 @@ main_plot <- ggplot(plot_df, aes(x = wolf_N_tot, y = elk_s_c)) +
   ) +
   geom_line(
     data = line_df,
-    aes(x = wolf_N_tot, y = elk_s_c),
+    aes(x = wolf_N_tot, y = elk_surv),
     inherit.aes = FALSE,
     color = "#6F263D",
     linewidth = 1
@@ -1004,53 +1062,68 @@ main_plot <- ggplot(plot_df, aes(x = wolf_N_tot, y = elk_s_c)) +
   geom_errorbar(aes(ymin = elk_low, ymax = elk_high), width = 0) +
   geom_errorbarh(aes(xmin = wolf_low, xmax = wolf_high), height = 0) +
   geom_point(shape = 21, fill = "gold", color = "black", size = 2.5) +
+  facet_wrap(~stage, scales = "free_y") +
   theme_classic() +
   labs(
     x = "Wolf abundance",
-    y = "Elk calf survival",
-    title = "Elk calf survival vs. wolf abundance"
+    y = "Elk survival",
+    title = "Estimated effect of wolf abundance on elk survival"
   )
 
-# posterior densities of coefficients
+# view main plot
+main_plot
+
+# then extract posterior densities of coefficients
 beta_df <- data.frame(
-  beta0 = post_mat[, "beta0"],
-  beta1 = post_mat[, "beta1"]
+  beta0_calfSurv = post_mat[, "beta0_calfSurv"],
+  beta1_calfSurv = post_mat[, "beta1_calfSurv"],
+  beta0_yaSurv = post_mat[, "beta0_yaSurv"],
+  beta1_yaSurv = post_mat[, "beta1_yaSurv"],
+  beta0_oaSurv = post_mat[, "beta0_oaSurv"],
+  beta1_oaSurv = post_mat[, "beta1_oaSurv"]
 )
 
-beta0_plot <- ggplot(beta_df, aes(x = beta0)) +
-  geom_density(fill = "#236192", alpha = 0.45) +
-  theme_classic() +
-  labs(
-    x = "beta0",
-    y = "Density",
-    title = "Posterior of intercept"
-  )
+# reshape dataframe
+beta_long <- beta_df %>%
+  pivot_longer(cols = everything(), names_to = "parameter", values_to = "value")
 
-beta1_plot <- ggplot(beta_df, aes(x = beta1)) +
-  geom_density(fill = "#236192", alpha = 0.45) +
-  geom_vline(xintercept = 0, linetype = 2) +
-  theme_classic() +
-  labs(
-    x = "beta1",
-    y = "Density",
-    title = "Posterior of wolf effect"
+# relabel
+beta_long$parameter <- factor(
+  beta_long$parameter,
+  levels = c(
+    "beta0_calfSurv", "beta1_calfSurv",
+    "beta0_yaSurv", "beta1_yaSurv",
+    "beta0_oaSurv", "beta1_oaSurv"
+  ),
+  labels = c(
+    "Calf intercept", "Calf wolf effect",
+    "YA intercept", "YA wolf effect",
+    "OA intercept", "OA wolf effect"
   )
-
-# combine bottom row
-bottom_row <- plot_grid(
-  beta0_plot,
-  beta1_plot,
-  ncol = 2,
-  labels = c("B", "C")
 )
 
-# final combined figure
+# generate coefficient estimate density plots
+coef_plot <- ggplot(beta_long, aes(x = value)) +
+  geom_density(fill = "#236192", alpha = 0.45) +
+  facet_wrap(~parameter, scales = "free", ncol = 2) +
+  theme_classic() +
+  labs(
+    x = "Posterior value",
+    y = "Density",
+    title = "Posterior distributions of regression coefficients"
+  )
+
+# view coef plot
+coef_plot
+
+# piece the main_plot and coef_plot together 
 final_plot <- plot_grid(
   main_plot,
-  bottom_row,
+  coef_plot,
   ncol = 1,
-  rel_heights = c(2, 1),
-  labels = c("A", "")
+  rel_heights = c(2, 1.5),
+  labels = c("A", "B")
 )
 
+# view final plot
 final_plot
