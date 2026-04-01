@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Combines elk IPM + wolf IPM in one NIMBLE model
-### Last updated: Mar. 26, 2026
+### Last updated: Mar. 31, 2026
 ### xprockox@gmail.com
 
 ################################################################################
