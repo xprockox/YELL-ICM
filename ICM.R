@@ -571,9 +571,9 @@ icm_mod <- nimbleMCMC(
 
 # SAVE OUTPUT
 #stop('The following line will overwrite data. Are you sure you would like to proceed?')
-#save.image('data/outputs/ICM_environment_2026-03-30.RData')
+save.image('data/outputs/ICM_environment_2026-03-31_run3.RData')
 
-load('data/outputs/ICM_environment_2026-03-31_run2.RData')
+#load('data/outputs/ICM_environment_2026-03-31_run3.RData')
 
 ################################################################################
 ###########--------------------- Results ----------------------#################
