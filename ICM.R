@@ -573,7 +573,7 @@ icm_mod <- nimbleMCMC(
 #stop('The following line will overwrite data. Are you sure you would like to proceed?')
 #save.image('data/outputs/ICM_environment_2026-03-30.RData')
 
-load('data/outputs/ICM_environment_2026-03-31.RData')
+load('data/outputs/ICM_environment_2026-03-31_run2.RData')
 
 ################################################################################
 ###########--------------------- Results ----------------------#################
@@ -1153,26 +1153,29 @@ final_plot
 ##########------------------ Elasticity analysis ---------------------##########
 ################################################################################
 
-# pull posterior mean elk vital rates by year
+# ------------------------------------------------------------------------------
+# Build annual elk matrices, lambda, and matrix-transition elasticities
+# ------------------------------------------------------------------------------
+
 elk_rates_wide <- elk_vrates2 %>%
   filter(rate %in% c(
     "Calf survival (s_c)",
     "Young Adult survival (s_ya)",
     "Old Adult survival (s_oa)",
-    "Young-Old transition (p_13)",
+    "Young→Old transition (p_13)",
     "Fecundity (young) (f_ya)",
     "Fecundity (old) (f_oa)"
   )) %>%
   select(year, rate, mean) %>%
-  pivot_wider(names_from = rate, values_from = mean)
+  pivot_wider(names_from = rate, values_from = mean) %>%
+  drop_na()
 
-# calculate matrix elasticities for each year
 elk_elasticity_list <- lapply(1:nrow(elk_rates_wide), function(i) {
   
-  s_c <- elk_rates_wide$`Calf survival (s_c)`[i]
+  s_c  <- elk_rates_wide$`Calf survival (s_c)`[i]
   s_ya <- elk_rates_wide$`Young Adult survival (s_ya)`[i]
   s_oa <- elk_rates_wide$`Old Adult survival (s_oa)`[i]
-  p_13 <- elk_rates_wide$`Young-Old transition (p_13)`[i]
+  p_13 <- elk_rates_wide$`Young→Old transition (p_13)`[i]
   f_ya <- elk_rates_wide$`Fecundity (young) (f_ya)`[i]
   f_oa <- elk_rates_wide$`Fecundity (old) (f_oa)`[i]
   
@@ -1191,6 +1194,7 @@ elk_elasticity_list <- lapply(1:nrow(elk_rates_wide), function(i) {
   
   data.frame(
     year = elk_rates_wide$year[i],
+    lambda = lambda,
     a12 = E[1, 2],
     a13 = E[1, 3],
     a21 = E[2, 1],
@@ -1201,4 +1205,89 @@ elk_elasticity_list <- lapply(1:nrow(elk_rates_wide), function(i) {
 })
 
 elk_elasticity_df <- bind_rows(elk_elasticity_list)
-elk_elasticity_df
+
+# ------------------------------------------------------------------------------
+# Clean long-format elasticity dataframe with readable transition labels
+# ------------------------------------------------------------------------------
+
+elk_elasticity_long <- elk_elasticity_df %>%
+  pivot_longer(
+    cols = c(a12, a13, a21, a22, a32, a33),
+    names_to = "transition",
+    values_to = "elasticity"
+  ) %>%
+  mutate(
+    transition = factor(
+      transition,
+      levels = c("a12", "a13", "a21", "a22", "a32", "a33"),
+      labels = c(
+        "Yearling recruitment from young adults",
+        "Yearling recruitment from old adults",
+        "Yearling → young adult",
+        "Young adult survival (non-transition)",
+        "Young adult → old adult",
+        "Old adult survival (non-transition)"
+      )
+    )
+  )
+
+# ------------------------------------------------------------------------------
+# 1) Lambda through time
+# ------------------------------------------------------------------------------
+
+lambda_plot <- ggplot(elk_elasticity_df, aes(x = year, y = lambda)) +
+  geom_hline(yintercept = 1, linetype = 2) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  theme_classic() +
+  labs(
+    x = "Year",
+    y = expression(lambda),
+    title = "Annual elk population growth rate from projection matrix",
+    subtitle = "Dashed line at lambda = 1 indicates stable population size"
+  )
+
+lambda_plot
+
+# ------------------------------------------------------------------------------
+# 2) Elasticity of lambda to matrix transitions through time
+# ------------------------------------------------------------------------------
+
+elasticity_time_plot <- ggplot(elk_elasticity_long, aes(x = year, y = elasticity)) +
+  geom_line(linewidth = 1) +
+  facet_wrap(~ transition, scales = "free_y") +
+  theme_classic() +
+  labs(
+    x = "Year",
+    y = "Elasticity",
+    title = "Elasticity of elk population growth to matrix transitions"
+  ) +
+  theme(legend.position = "none")
+
+elasticity_time_plot
+
+# ------------------------------------------------------------------------------
+# 3) Mean elasticity across years
+# ------------------------------------------------------------------------------
+
+elk_elasticity_summary <- elk_elasticity_long %>%
+  group_by(transition) %>%
+  summarise(
+    mean_elasticity = mean(elasticity, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(mean_elasticity))
+
+elasticity_bar_plot <- ggplot(elk_elasticity_summary,
+                              aes(x = reorder(transition, mean_elasticity),
+                                  y = mean_elasticity)) +
+  geom_col() +
+  coord_flip() +
+  theme_classic() +
+  labs(
+    x = NULL,
+    y = "Mean elasticity",
+    title = "Mean elasticity of elk population growth to matrix transitions"
+  )
+
+elasticity_bar_plot
