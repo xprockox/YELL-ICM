@@ -576,6 +576,21 @@ save.image('data/outputs/ICM_environment_2026-03-31_run3.RData')
 #load('data/outputs/ICM_environment_2026-03-31_run3.RData')
 
 ################################################################################
+############------- Reload packages if data loaded in --------##################
+################################################################################
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(tidyverse)
+library(MCMCvis)
+library(ggplot2)
+library(nimble)
+library(coda)
+library(stringr)
+library(cowplot)
+library(popbio)
+
+################################################################################
 ###########--------------------- Results ----------------------#################
 ################################################################################
 
