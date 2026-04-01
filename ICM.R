@@ -336,23 +336,23 @@ icm_code <- nimbleCode({
   ##########---------------- REGRESSIONS ----------------#############
   
   # Priors for regression coefficients
-  beta0_calfSurv ~ dnorm(qlogis(0.22), 1 / 0.5^2) # mean = 0.22
-  beta1_calfSurv ~ dnorm(0, 1 / 1^2)
+  beta0_calfSurv ~ dnorm(qlogis(0.22), 1 / 0.3^2) # mean = 0.22
+  beta1_calfSurv ~ dnorm(0, 1 / 0.3^2)
   
-  beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.5^2) # mean = 0.90
-  beta1_yaSurv ~ dnorm(0, 1 / 1^2)
+  beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2) # mean = 0.90
+  beta1_yaSurv ~ dnorm(0, 1 / 0.3^2)
   
-  beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.5^2) # mean = 0.80
-  beta1_oaSurv ~ dnorm(0, 1 / 1^2)
+  beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2) # mean = 0.80
+  beta1_oaSurv ~ dnorm(0, 1 / 0.3^2)
   
   # Priors for random year-effect SDs
-  sigma_calf ~ dunif(0, 2)
+  sigma_calf ~ dunif(0, 0.5)
   tau_calf <- 1 / (sigma_calf^2)
   
-  sigma_ya ~ dunif(0, 2)
+  sigma_ya ~ dunif(0, 0.3)
   tau_ya <- 1 / (sigma_ya^2)
   
-  sigma_oa ~ dunif(0, 2)
+  sigma_oa ~ dunif(0, 0.3)
   tau_oa <- 1 / (sigma_oa^2)
   
   # Year-specific regressions
@@ -1291,3 +1291,17 @@ elasticity_bar_plot <- ggplot(elk_elasticity_summary,
   )
 
 elasticity_bar_plot
+
+# ------------------------------------------------------------------------------
+# 4) Lambda through time and mean elasticity across years
+# ------------------------------------------------------------------------------
+
+elasticity_combo <- plot_grid(
+  lambda_plot,
+  elasticity_bar_plot,
+  ncol = 1,
+  rel_heights = c(1, 1.1),
+  labels = c("A", "B")
+)
+
+elasticity_combo
