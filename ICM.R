@@ -586,9 +586,11 @@ icm_params <- c(
 
 set.seed(17)
 nc <- 3
-ni <- 1000000
-nb <- 200000
+ni <- 100000
+nb <- 20000
 th <- 4
+
+start_time <- Sys.time()
 
 icm_mod <- nimbleMCMC(
   code = icm_code,
@@ -602,6 +604,11 @@ icm_mod <- nimbleMCMC(
   thin = th,
   summary = TRUE
 )
+
+end_time <- Sys.time()
+run_time <- end_time - start_time
+
+print(paste0('Model runtime: ', round(run_time, 2), ' seconds.'))
 
 # SAVE OUTPUT
 #stop('The following line will overwrite data. Are you sure you would like to proceed?')
