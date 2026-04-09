@@ -590,8 +590,8 @@ icm_params <- c(
 
 set.seed(17)
 nc <- 3
-ni <- 100000
-nb <- 20000
+ni <- 200000
+nb <- 40000
 th <- 4
 
 start_time <- Sys.time()
@@ -612,13 +612,16 @@ icm_mod <- nimbleMCMC(
 end_time <- Sys.time()
 run_time <- end_time - start_time
 
-print(paste0('Model runtime: ', round(run_time, 2), ' seconds.'))
+print(paste0('Model runtime: ', 
+             round(run_time, 2), 
+             ' ', 
+             units(run_time)))
 
 # SAVE OUTPUT
-#stop('The following line will overwrite data. Are you sure you would like to proceed?')
-# save.image('data/outputs/ICM_environment_2026-04-07.RData')
+# stop('The following line will overwrite data. Are you sure you would like to proceed?')
+save.image('data/outputs/ICM_environment_2026-04-09.RData')
 
-load('data/outputs/ICM_environment_2026-04-07.RData')
+# load('data/outputs/ICM_environment_2026-04-07.RData')
 
 ################################################################################
 ############------- Reload packages if data loaded in --------##################
