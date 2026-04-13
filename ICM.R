@@ -621,7 +621,7 @@ print(paste0('Model runtime: ',
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
 save.image('data/outputs/ICM_environment_2026-04-09.RData')
 
-# load('data/outputs/ICM_environment_2026-04-07.RData')
+load('data/outputs/ICM_environment_2026-04-09.RData')
 
 ################################################################################
 ############------- Reload packages if data loaded in --------##################
@@ -637,6 +637,27 @@ library(coda)
 library(stringr)
 library(cowplot)
 library(popbio)
+
+################################################################################
+############--------------- Load covariates ---------------#####################
+################################################################################
+
+# load data
+annual_prism <- read.csv('data/covariates/prism_annual_precip_tmean.csv')
+bison <- read.csv('data/covariates/NR_Bison_Abundance.csv') %>%
+  rename(year = Year)
+
+# bind data into one dataframe 'covars"
+covars <- left_join(annual_prism, bison)
+
+# trim covariate data to shared years 
+covars <- covars[covars$year %in% community_years,]
+
+# standardize all covariates except year
+covars_std <- covars %>%
+  mutate(
+    across(-year, ~ as.numeric(scale(.)))
+  )
 
 ################################################################################
 ###########--------------------- Results ----------------------#################
