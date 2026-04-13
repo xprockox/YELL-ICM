@@ -175,11 +175,9 @@ icm_code <- nimbleCode({
   # elk priors
   for (t in 1:n_years) {
     
-    # logit(elk_s_c[t]) ~ dnorm(qlogis(0.22), 1 / 0.5^2) 
-    # logit(elk_s_ya[t]) ~ dnorm(qlogis(0.90), 1 / 0.5^2) # mean survival = 0.9
-    # logit(elk_s_oa[t]) ~ dnorm(qlogis(0.80), 1 / 0.5^2) # mean survival = 0.8
-    
-    # ^ These are commented out so the regressions at the bottom can run.
+    logit(elk_s_c[t]) ~ dnorm(qlogis(0.22), 1 / 0.5^2)
+    logit(elk_s_ya[t]) ~ dnorm(qlogis(0.90), 1 / 0.5^2) # mean survival = 0.9
+    logit(elk_s_oa[t]) ~ dnorm(qlogis(0.80), 1 / 0.5^2) # mean survival = 0.8
     
     logit(elk_p_13[t]) ~ dnorm(qlogis(0.15), 1 / 0.5^2)
   }
@@ -274,8 +272,8 @@ icm_code <- nimbleCode({
   
   # wolf priors
   for (t in 1:n_years) {
-    # logit(wolf_s_p[t]) ~ dnorm(qlogis(0.5), 1 / 0.5^2) # mean = 0.5
-    # logit(wolf_s_a[t]) ~ dnorm(qlogis(0.9), 1 / 0.5^2) # mean = 0.9
+    logit(wolf_s_p[t]) ~ dnorm(qlogis(0.5), 1 / 0.5^2) # mean = 0.5
+    logit(wolf_s_a[t]) ~ dnorm(qlogis(0.9), 1 / 0.5^2) # mean = 0.9
     wolf_f[t] ~ dgamma(2, 2)   # mean = 1, but tighter than gamma(1,1)
   }
   
@@ -337,67 +335,67 @@ icm_code <- nimbleCode({
   
   ##########---------------- REGRESSIONS ----------------#############
   
-  # Priors for elk regression coefficients
-  beta0_calfSurv ~ dnorm(qlogis(0.22), 1 / 0.3^2) # mean = 0.22
-  beta1_calfSurv ~ dnorm(0, 1 / 0.3^2)
-  
-  beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2) # mean = 0.90
-  beta1_yaSurv ~ dnorm(0, 1 / 0.3^2)
-  
-  beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2) # mean = 0.80
-  beta1_oaSurv ~ dnorm(0, 1 / 0.3^2)
-  
-  # Priors for elk random year-effect SDs
-  sigma_calf ~ dunif(0, 0.5)
-  tau_calf <- 1 / (sigma_calf^2)
-  
-  sigma_ya ~ dunif(0, 0.3)
-  tau_ya <- 1 / (sigma_ya^2)
-  
-  sigma_oa ~ dunif(0, 0.3)
-  tau_oa <- 1 / (sigma_oa^2)
-  
-  # Priors for regression coefficients
-  beta0_wpupSurv ~ dnorm(qlogis(0.5), 1 / 0.3^2) # mean = 0.22
-  beta1_wpupSurv ~ dnorm(0, 1 / 0.3^2)
-  
-  beta0_wadSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2) # mean = 0.90
-  beta1_wadSurv ~ dnorm(0, 1 / 0.3^2)
-  
-  # Priors for wolf random year-effect SDs
-  sigma_wpup ~ dunif(0, 0.5)
-  tau_wpup <- 1 / (sigma_wpup^2)
-  
-  sigma_wad ~ dunif(0, 0.3)
-  tau_wad <- 1 / (sigma_wad^2)
-  
-  # Year-specific regressions
-  for (t in 1:n_years) {
-    
-    # elk random year effects
-    eps_elk_s_c[t] ~ dnorm(0, tau_calf)
-    eps_elk_s_ya[t] ~ dnorm(0, tau_ya)
-    eps_elk_s_oa[t] ~ dnorm(0, tau_oa)
-    
-    # elk random year effects
-    eps_wolf_s_p[t] ~ dnorm(0, tau_wpup)
-    eps_wolf_s_a[t] ~ dnorm(0, tau_wad)
-    
-    # standardize wolf abundance
-    wolf_N_tot_std[t] <- (wolf_N_tot[t] - wolf_tot_mean) / wolf_tot_sd
-    
-    # standardize elk abundance
-    elk_N_female_std[t] <- (elk_N_female[t] - elk_N_female_mean) / elk_N_female_sd
-    
-    # elk regression models
-    logit(elk_s_c[t])  <- beta0_calfSurv + beta1_calfSurv * wolf_N_tot_std[t] + eps_elk_s_c[t]
-    logit(elk_s_ya[t]) <- beta0_yaSurv   + beta1_yaSurv   * wolf_N_tot_std[t] + eps_elk_s_ya[t]
-    logit(elk_s_oa[t]) <- beta0_oaSurv   + beta1_oaSurv   * wolf_N_tot_std[t] + eps_elk_s_oa[t]
-    
-    # wolf regression models
-    logit(wolf_s_p[t])  <- beta0_wpupSurv + beta1_wpupSurv * elk_N_female_std[t] + eps_wolf_s_p[t]
-    logit(wolf_s_a[t]) <- beta0_wadSurv   + beta1_wadSurv   * elk_N_female_std[t] + eps_wolf_s_a[t]
-  }
+  # # Priors for elk regression coefficients
+  # beta0_calfSurv ~ dnorm(qlogis(0.22), 1 / 0.3^2) # mean = 0.22
+  # beta1_calfSurv ~ dnorm(0, 1 / 0.3^2)
+  # 
+  # beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2) # mean = 0.90
+  # beta1_yaSurv ~ dnorm(0, 1 / 0.3^2)
+  # 
+  # beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2) # mean = 0.80
+  # beta1_oaSurv ~ dnorm(0, 1 / 0.3^2)
+  # 
+  # # Priors for elk random year-effect SDs
+  # sigma_calf ~ dunif(0, 0.5)
+  # tau_calf <- 1 / (sigma_calf^2)
+  # 
+  # sigma_ya ~ dunif(0, 0.3)
+  # tau_ya <- 1 / (sigma_ya^2)
+  # 
+  # sigma_oa ~ dunif(0, 0.3)
+  # tau_oa <- 1 / (sigma_oa^2)
+  # 
+  # # Priors for regression coefficients
+  # beta0_wpupSurv ~ dnorm(qlogis(0.5), 1 / 0.3^2) # mean = 0.22
+  # beta1_wpupSurv ~ dnorm(0, 1 / 0.3^2)
+  # 
+  # beta0_wadSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2) # mean = 0.90
+  # beta1_wadSurv ~ dnorm(0, 1 / 0.3^2)
+  # 
+  # # Priors for wolf random year-effect SDs
+  # sigma_wpup ~ dunif(0, 0.5)
+  # tau_wpup <- 1 / (sigma_wpup^2)
+  # 
+  # sigma_wad ~ dunif(0, 0.3)
+  # tau_wad <- 1 / (sigma_wad^2)
+  # 
+  # # Year-specific regressions
+  # for (t in 1:n_years) {
+  #   
+  #   # elk random year effects
+  #   eps_elk_s_c[t] ~ dnorm(0, tau_calf)
+  #   eps_elk_s_ya[t] ~ dnorm(0, tau_ya)
+  #   eps_elk_s_oa[t] ~ dnorm(0, tau_oa)
+  #   
+  #   # elk random year effects
+  #   eps_wolf_s_p[t] ~ dnorm(0, tau_wpup)
+  #   eps_wolf_s_a[t] ~ dnorm(0, tau_wad)
+  #   
+  #   # standardize wolf abundance
+  #   wolf_N_tot_std[t] <- (wolf_N_tot[t] - wolf_tot_mean) / wolf_tot_sd
+  #   
+  #   # standardize elk abundance
+  #   elk_N_female_std[t] <- (elk_N_female[t] - elk_N_female_mean) / elk_N_female_sd
+  #   
+  #   # elk regression models
+  #   logit(elk_s_c[t])  <- beta0_calfSurv + beta1_calfSurv * wolf_N_tot_std[t] + eps_elk_s_c[t]
+  #   logit(elk_s_ya[t]) <- beta0_yaSurv   + beta1_yaSurv   * wolf_N_tot_std[t] + eps_elk_s_ya[t]
+  #   logit(elk_s_oa[t]) <- beta0_oaSurv   + beta1_oaSurv   * wolf_N_tot_std[t] + eps_elk_s_oa[t]
+  #   
+  #   # wolf regression models
+  #   logit(wolf_s_p[t])  <- beta0_wpupSurv + beta1_wpupSurv * elk_N_female_std[t] + eps_wolf_s_p[t]
+  #   logit(wolf_s_a[t]) <- beta0_wadSurv   + beta1_wadSurv   * elk_N_female_std[t] + eps_wolf_s_a[t]
+  # }
 })
 
 ################################################################################
@@ -407,12 +405,12 @@ icm_code <- nimbleCode({
 icm_constants <- list(
   n_years = n_years,
   elk_N_indiv = elk_N_indiv,
-  wolf_N_indiv = wolf_N_indiv,
+  wolf_N_indiv = wolf_N_indiv
   # these are added to allow the abundance metrics to be standardized
-  wolf_tot_mean = mean(wolf_pop$total_abundance, na.rm = TRUE),
-  wolf_tot_sd = sd(wolf_pop$total_abundance, na.rm = TRUE),
-  elk_N_female_mean = mean(elk_dat_n$n_female, na.rm=TRUE), 
-  elk_N_female_sd =sd(elk_dat_n$n_female, na.rm=TRUE)
+  # wolf_tot_mean = mean(wolf_pop$total_abundance, na.rm = TRUE),
+  # wolf_tot_sd = sd(wolf_pop$total_abundance, na.rm = TRUE),
+  # elk_N_female_mean = mean(elk_dat_n$n_female, na.rm=TRUE), 
+  # elk_N_female_sd =sd(elk_dat_n$n_female, na.rm=TRUE)
 )
 
 icm_data <- list(
@@ -526,9 +524,9 @@ make_icm_inits <- function() {
   
   list(
     # elk
-    # elk_s_c = rep(0.22, n_years),
-    # elk_s_ya = rep(0.90, n_years),
-    # elk_s_oa = rep(0.80, n_years), ## removed these because they are deterministic in regressions
+    elk_s_c = rep(0.22, n_years),
+    elk_s_ya = rep(0.90, n_years),
+    elk_s_oa = rep(0.80, n_years),
     elk_p_13 = rep(0.15, n_years),
     elk_f_ya = rep(0.76, n_years - 1),
     elk_f_oa = rep(0.64, n_years - 1),
@@ -540,8 +538,8 @@ make_icm_inits <- function() {
     elk_z = elk_z_init,
     
     # wolf
-    # wolf_s_p = rep(0.5, n_years), 
-    # wolf_s_a = rep(0.9, n_years), ## removed these because they are deterministic in regressions
+    wolf_s_p = rep(0.5, n_years),
+    wolf_s_a = rep(0.9, n_years),
     wolf_f = rep(1.0, n_years),
     wolf_sigma_obs = 0.2,
     wolf_N_p_sum = pmax(1, round(wolf_pop$summer_pups)),
@@ -566,22 +564,22 @@ icm_params <- c(
   # wolf
   "wolf_s_p", "wolf_s_a", "wolf_f",
   "wolf_p_det",
-  "wolf_N_p_sum", "wolf_N_p", "wolf_N_a", "wolf_N_tot",
+  "wolf_N_p_sum", "wolf_N_p", "wolf_N_a", "wolf_N_tot"
   
-  # elk regression coefficients
-  'beta0_calfSurv', 'beta1_calfSurv',
-  'beta0_yaSurv', 'beta1_yaSurv',
-  'beta0_oaSurv', 'beta1_oaSurv',
-  
-  "sigma_calf", "sigma_ya", "sigma_oa",
-  "eps_elk_s_c", "eps_elk_s_ya", "eps_elk_s_oa",
-  
-  # wolf regression coefficients
-  'beta0_wpupSurv', 'beta1_wpupSurv',
-  'beta0_wadSurv', 'beta1_wadSurv',
-
-  "sigma_wpup", "sigma_wad",
-  "eps_wolf_s_p", "eps_wolf_s_a"
+  # # elk regression coefficients
+  # 'beta0_calfSurv', 'beta1_calfSurv',
+  # 'beta0_yaSurv', 'beta1_yaSurv',
+  # 'beta0_oaSurv', 'beta1_oaSurv',
+  # 
+  # "sigma_calf", "sigma_ya", "sigma_oa",
+  # "eps_elk_s_c", "eps_elk_s_ya", "eps_elk_s_oa",
+  # 
+  # # wolf regression coefficients
+  # 'beta0_wpupSurv', 'beta1_wpupSurv',
+  # 'beta0_wadSurv', 'beta1_wadSurv',
+  # 
+  # "sigma_wpup", "sigma_wad",
+  # "eps_wolf_s_p", "eps_wolf_s_a"
 )
 
 ################################################################################
@@ -590,8 +588,8 @@ icm_params <- c(
 
 set.seed(17)
 nc <- 3
-ni <- 200000
-nb <- 40000
+ni <- 100
+nb <- 20
 th <- 4
 
 start_time <- Sys.time()
