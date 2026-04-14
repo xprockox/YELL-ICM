@@ -534,7 +534,24 @@ print(paste0('Model runtime: ',
 
 # SAVE OUTPUT
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
-save.image('data/outputs/ICM_environment_2026-04-14.RData')
+# save.image('data/outputs/ICM_environment_2026-04-14.RData')
+
+load('data/outputs/ICM_environment_2026-04-14.RData')
+
+################################################################################
+#################---------- Reload packages ---------###########################
+################################################################################
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(tidyverse)
+library(MCMCvis)
+library(ggplot2)
+library(nimble)
+library(coda)
+library(stringr)
+library(cowplot)
+library(popbio)
 
 ################################################################################
 ###########--------------------- Results ----------------------#################
