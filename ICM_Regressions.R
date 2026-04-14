@@ -56,7 +56,7 @@ reg_df <- dat2 %>%
   transmute(
     year,
     
-    elk_s_c  = clamp01(mean_Calf.survival..s_c.),
+    elk_s_c = clamp01(mean_Calf.survival..s_c.),
     elk_s_ya = clamp01(mean_Young.Adult.survival..s_ya.),
     elk_s_oa = clamp01(mean_Old.Adult.survival..s_oa.),
     
@@ -66,12 +66,19 @@ reg_df <- dat2 %>%
     wolf_N_tot = wolf_N_tot,
     elk_N_female = elk_N_female,
     
-    annual_ppt_mm = annual_ppt_mm,
-    summer_ppt_mm = summer_ppt_mm,
-    winter_ppt_mm = winter_ppt_mm,
-    summer_tmean_c = summer_tmean_c,
-    winter_tmean_c = winter_tmean_c,
-    NR_Bison = NR_Bison
+    annual_ppt_mm_raw = covars$annual_ppt_mm[match(year, covars$year)],
+    summer_ppt_mm_raw = covars$summer_ppt_mm[match(year, covars$year)],
+    winter_ppt_mm_raw = covars$winter_ppt_mm[match(year, covars$year)],
+    summer_tmean_c_raw = covars$summer_tmean_c[match(year, covars$year)],
+    winter_tmean_c_raw = covars$winter_tmean_c[match(year, covars$year)],
+    NR_Bison_raw = covars$NR_Bison[match(year, covars$year)],
+    
+    annual_ppt_mm_std = annual_ppt_mm,
+    summer_ppt_mm_std = summer_ppt_mm,
+    winter_ppt_mm_std = winter_ppt_mm,
+    summer_tmean_c_std = summer_tmean_c,
+    winter_tmean_c_std = winter_tmean_c,
+    NR_Bison_std = NR_Bison
   ) %>%
   mutate(
     wolf_N_tot_std = as.numeric(scale(wolf_N_tot)),
@@ -184,11 +191,11 @@ stage2_data <- list(
   
   # elk predictors
   wolf_N_tot_std = reg_df$wolf_N_tot_std,
-  winter_ppt_mm = reg_df$winter_ppt_mm,
+  winter_ppt_mm = reg_df$winter_ppt_mm_std,
   
   # wolf predictors
   elk_N_female_std = reg_df$elk_N_female_std,
-  NR_Bison = reg_df$NR_Bison
+  NR_Bison = reg_df$NR_Bison_std
 )
 
 ################################################################################
@@ -242,9 +249,9 @@ print(paste0('Model runtime: ',
 
 # SAVE OUTPUT
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
-save.image('data/outputs/ICM_Regression_environment_2026-04-14.RData')
+# save.image('data/outputs/ICM_Regression_environment_2026-04-14.RData')
 
-# load('data/outputs/ICM_Regression_environment_2026-04-14.RData')
+load('data/outputs/ICM_Regression_environment_2026-04-14.RData')
 
 ################################################################################
 ###########--------------------- Results ----------------------#################
@@ -296,7 +303,7 @@ plot_df_elk <- bind_rows(
       year,
       elk_surv = elk_s_c,
       wolf_N_tot = wolf_N_tot,
-      winter_ppt_mm = winter_ppt_mm,
+      winter_ppt_mm = winter_ppt_mm_raw,
       stage = "Calf survival"
     ),
   reg_df %>%
@@ -304,7 +311,7 @@ plot_df_elk <- bind_rows(
       year,
       elk_surv = elk_s_ya,
       wolf_N_tot = wolf_N_tot,
-      winter_ppt_mm = winter_ppt_mm,
+      winter_ppt_mm = winter_ppt_mm_raw,
       stage = "Young adult survival"
     ),
   reg_df %>%
@@ -312,7 +319,7 @@ plot_df_elk <- bind_rows(
       year,
       elk_surv = elk_s_oa,
       wolf_N_tot = wolf_N_tot,
-      winter_ppt_mm = winter_ppt_mm,
+      winter_ppt_mm = winter_ppt_mm_raw,
       stage = "Old adult survival"
     )
 )
@@ -414,15 +421,19 @@ wolf_plot_elk
 #######------------- Winter precipitation effect on elk ----------------########
 ################################################################################
 
-x_grid_ppt <- seq(
-  min(reg_df$winter_ppt_mm, na.rm = TRUE),
-  max(reg_df$winter_ppt_mm, na.rm = TRUE),
+x_grid_ppt_raw <- seq(
+  min(reg_df$winter_ppt_mm_raw, na.rm = TRUE),
+  max(reg_df$winter_ppt_mm_raw, na.rm = TRUE),
   length.out = 200
 )
 
+ppt_mean <- mean(reg_df$winter_ppt_mm_raw, na.rm = TRUE)
+ppt_sd <- sd(reg_df$winter_ppt_mm_raw, na.rm = TRUE)
+x_grid_ppt_std <- (x_grid_ppt_raw - ppt_mean) / ppt_sd
+
 wolf_mean_std <- mean(reg_df$wolf_N_tot_std, na.rm = TRUE)
 
-pred_calf_ppt <- sapply(x_grid_ppt, function(x) {
+pred_calf_ppt <- sapply(x_grid_ppt_std, function(x) {
   plogis(
     post_mat[, "beta0_calf"] +
       post_mat[, "beta1_calf_wolf"] * wolf_mean_std +
@@ -430,7 +441,7 @@ pred_calf_ppt <- sapply(x_grid_ppt, function(x) {
   )
 })
 
-pred_ya_ppt <- sapply(x_grid_ppt, function(x) {
+pred_ya_ppt <- sapply(x_grid_ppt_std, function(x) {
   plogis(
     post_mat[, "beta0_ya"] +
       post_mat[, "beta1_ya_wolf"] * wolf_mean_std +
@@ -438,7 +449,7 @@ pred_ya_ppt <- sapply(x_grid_ppt, function(x) {
   )
 })
 
-pred_oa_ppt <- sapply(x_grid_ppt, function(x) {
+pred_oa_ppt <- sapply(x_grid_ppt_std, function(x) {
   plogis(
     post_mat[, "beta0_oa"] +
       post_mat[, "beta1_oa_wolf"] * wolf_mean_std +
@@ -448,21 +459,21 @@ pred_oa_ppt <- sapply(x_grid_ppt, function(x) {
 
 line_df_ppt_elk <- bind_rows(
   data.frame(
-    x = x_grid_ppt,
+    x = x_grid_ppt_raw,
     elk_surv = apply(pred_calf_ppt, 2, mean),
     elk_low = apply(pred_calf_ppt, 2, quantile, probs = 0.025),
     elk_high = apply(pred_calf_ppt, 2, quantile, probs = 0.975),
     stage = "Calf survival"
   ),
   data.frame(
-    x = x_grid_ppt,
+    x = x_grid_ppt_raw,
     elk_surv = apply(pred_ya_ppt, 2, mean),
     elk_low = apply(pred_ya_ppt, 2, quantile, probs = 0.025),
     elk_high = apply(pred_ya_ppt, 2, quantile, probs = 0.975),
     stage = "Young adult survival"
   ),
   data.frame(
-    x = x_grid_ppt,
+    x = x_grid_ppt_raw,
     elk_surv = apply(pred_oa_ppt, 2, mean),
     elk_low = apply(pred_oa_ppt, 2, quantile, probs = 0.025),
     elk_high = apply(pred_oa_ppt, 2, quantile, probs = 0.975),
@@ -489,7 +500,7 @@ ppt_plot_elk <- ggplot(plot_df_elk, aes(x = winter_ppt_mm, y = elk_surv)) +
   facet_wrap(~stage, scales = "free_y") +
   theme_classic() +
   labs(
-    x = "Winter precipitation (standardized)",
+    x = "Winter precipitation",
     y = "Elk survival",
     title = "Estimated effect of winter precipitation on elk survival",
     subtitle = "Wolf abundance held at its mean"
@@ -507,7 +518,7 @@ plot_df_wolf <- bind_rows(
       year,
       wolf_surv = wolf_s_p,
       elk_N_female = elk_N_female,
-      NR_Bison = NR_Bison,
+      NR_Bison = NR_Bison_raw,
       stage = "Pup survival"
     ),
   reg_df %>%
@@ -515,7 +526,7 @@ plot_df_wolf <- bind_rows(
       year,
       wolf_surv = wolf_s_a,
       elk_N_female = elk_N_female,
-      NR_Bison = NR_Bison,
+      NR_Bison = NR_Bison_raw,
       stage = "Adult survival"
     )
 )
@@ -600,16 +611,19 @@ elk_plot_wolf
 ###########-------------- Bison effect on wolf survival ----------------########
 ################################################################################
 
-x_grid_bison <- seq(
-  min(reg_df$NR_Bison, na.rm = TRUE),
-  max(reg_df$NR_Bison, na.rm = TRUE),
+x_grid_bison_raw <- seq(
+  min(reg_df$NR_Bison_raw, na.rm = TRUE),
+  max(reg_df$NR_Bison_raw, na.rm = TRUE),
   length.out = 200
 )
 
-# hold elk abundance constant at its mean standardized value
+bison_mean <- mean(reg_df$NR_Bison_raw, na.rm = TRUE)
+bison_sd <- sd(reg_df$NR_Bison_raw, na.rm = TRUE)
+x_grid_bison_std <- (x_grid_bison_raw - bison_mean) / bison_sd
+
 elk_mean_std <- mean(reg_df$elk_N_female_std, na.rm = TRUE)
 
-pred_wp_bison <- sapply(x_grid_bison, function(x) {
+pred_wp_bison <- sapply(x_grid_bison_std, function(x) {
   plogis(
     post_mat[, "beta0_wp"] +
       post_mat[, "beta1_wp_elk"] * elk_mean_std +
@@ -617,7 +631,7 @@ pred_wp_bison <- sapply(x_grid_bison, function(x) {
   )
 })
 
-pred_wa_bison <- sapply(x_grid_bison, function(x) {
+pred_wa_bison <- sapply(x_grid_bison_std, function(x) {
   plogis(
     post_mat[, "beta0_wa"] +
       post_mat[, "beta1_wa_elk"] * elk_mean_std +
@@ -627,14 +641,14 @@ pred_wa_bison <- sapply(x_grid_bison, function(x) {
 
 line_df_bison_wolf <- bind_rows(
   data.frame(
-    x = x_grid_bison,
+    x = x_grid_bison_raw,
     wolf_surv = apply(pred_wp_bison, 2, mean),
     wolf_low = apply(pred_wp_bison, 2, quantile, probs = 0.025),
     wolf_high = apply(pred_wp_bison, 2, quantile, probs = 0.975),
     stage = "Pup survival"
   ),
   data.frame(
-    x = x_grid_bison,
+    x = x_grid_bison_raw,
     wolf_surv = apply(pred_wa_bison, 2, mean),
     wolf_low = apply(pred_wa_bison, 2, quantile, probs = 0.025),
     wolf_high = apply(pred_wa_bison, 2, quantile, probs = 0.975),
@@ -661,7 +675,7 @@ bison_plot_wolf <- ggplot(plot_df_wolf, aes(x = NR_Bison, y = wolf_surv)) +
   facet_wrap(~stage, scales = "free_y") +
   theme_classic() +
   labs(
-    x = "Bison abundance (standardized)",
+    x = "Bison abundance",
     y = "Wolf survival",
     title = "Estimated effect of bison abundance on wolf survival",
     subtitle = "Elk abundance held at its mean"
