@@ -249,9 +249,9 @@ print(paste0('Model runtime: ',
 
 # SAVE OUTPUT
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
-# save.image('data/outputs/ICM_Regression_environment_2026-04-14.RData')
+save.image('data/outputs/ICM_Regression_environment_2026-04-14.RData')
 
-load('data/outputs/ICM_Regression_environment_2026-04-14.RData')
+# load('data/outputs/ICM_Regression_environment_2026-04-14.RData')
 
 ################################################################################
 ###########--------------------- Results ----------------------#################
@@ -340,7 +340,7 @@ wolf_mean <- mean(reg_df$wolf_N_tot, na.rm = TRUE)
 wolf_sd <- sd(reg_df$wolf_N_tot, na.rm = TRUE)
 x_grid_wolf_std <- (x_grid_wolf - wolf_mean) / wolf_sd
 
-winter_ppt_mean <- mean(reg_df$winter_ppt_mm, na.rm = TRUE)
+winter_ppt_mean <- mean(reg_df$winter_ppt_mm_std, na.rm = TRUE)
 
 pred_calf_wolf <- sapply(x_grid_wolf_std, function(x) {
   plogis(
@@ -427,9 +427,10 @@ x_grid_ppt_raw <- seq(
   length.out = 200
 )
 
-ppt_mean <- mean(reg_df$winter_ppt_mm_raw, na.rm = TRUE)
-ppt_sd <- sd(reg_df$winter_ppt_mm_raw, na.rm = TRUE)
-x_grid_ppt_std <- (x_grid_ppt_raw - ppt_mean) / ppt_sd
+ppt_mean_raw <- mean(reg_df$winter_ppt_mm_raw, na.rm = TRUE)
+ppt_sd_raw <- sd(reg_df$winter_ppt_mm_raw, na.rm = TRUE)
+
+x_grid_ppt_std <- (x_grid_ppt_raw - ppt_mean_raw) / ppt_sd_raw
 
 wolf_mean_std <- mean(reg_df$wolf_N_tot_std, na.rm = TRUE)
 
@@ -545,7 +546,7 @@ elk_mean <- mean(reg_df$elk_N_female, na.rm = TRUE)
 elk_sd <- sd(reg_df$elk_N_female, na.rm = TRUE)
 x_grid_elk_std <- (x_grid_elk - elk_mean) / elk_sd
 
-bison_mean <- mean(reg_df$NR_Bison, na.rm = TRUE)
+bison_mean <- mean(reg_df$NR_Bison_std, na.rm = TRUE)
 
 pred_wp_elk <- sapply(x_grid_elk_std, function(x) {
   plogis(
@@ -617,10 +618,12 @@ x_grid_bison_raw <- seq(
   length.out = 200
 )
 
-bison_mean <- mean(reg_df$NR_Bison_raw, na.rm = TRUE)
-bison_sd <- sd(reg_df$NR_Bison_raw, na.rm = TRUE)
-x_grid_bison_std <- (x_grid_bison_raw - bison_mean) / bison_sd
+bison_mean_raw <- mean(reg_df$NR_Bison_raw, na.rm = TRUE)
+bison_sd_raw <- sd(reg_df$NR_Bison_raw, na.rm = TRUE)
 
+x_grid_bison_std <- (x_grid_bison_raw - bison_mean_raw) / bison_sd_raw
+
+# hold elk abundance constant at its mean standardized value
 elk_mean_std <- mean(reg_df$elk_N_female_std, na.rm = TRUE)
 
 pred_wp_bison <- sapply(x_grid_bison_std, function(x) {
