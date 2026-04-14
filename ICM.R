@@ -175,7 +175,7 @@ icm_code <- nimbleCode({
   # elk priors
   for (t in 1:n_years) {
     
-    logit(elk_s_c[t]) ~ dnorm(qlogis(0.22), 1 / 0.5^2)
+    logit(elk_s_c[t]) ~ dnorm(qlogis(0.22), 1 / 0.5^2) # mean survival = 0.22
     logit(elk_s_ya[t]) ~ dnorm(qlogis(0.90), 1 / 0.5^2) # mean survival = 0.9
     logit(elk_s_oa[t]) ~ dnorm(qlogis(0.80), 1 / 0.5^2) # mean survival = 0.8
     
@@ -191,7 +191,7 @@ icm_code <- nimbleCode({
   elk_tau_obs_female <- 1 / (elk_sigma_obs_female^2)
   
   # elk initial values
-  elk_N_1y[1] ~ dpois(2500) # mean values from rough estimations
+  elk_N_1y[1] ~ dpois(2500) # start by initializing with mean values from rough estimations
   elk_N_ya[1] ~ dpois(10000) # using total abundance and classification (cow:calf) data
   elk_N_oa[1] ~ dpois(1000) # and hunter harvest (age) data for prop young vs. old adults
   
@@ -263,7 +263,7 @@ icm_code <- nimbleCode({
     elk_old_num_preg[t] ~ dbin(elk_f_oa[t], elk_old_num_capt[t])
   }
   
-  # elk growth
+  # elk growth from 13 y.o. to 14 y.o. (stage-transition)
   for (t in 1:n_years) {
     elk_harvested_13yo[t] ~ dbin(elk_p_13[t], elk_harvested_ya[t])
   }
@@ -272,9 +272,9 @@ icm_code <- nimbleCode({
   
   # wolf priors
   for (t in 1:n_years) {
-    logit(wolf_s_p[t]) ~ dnorm(qlogis(0.5), 1 / 0.5^2) # mean = 0.5
-    logit(wolf_s_a[t]) ~ dnorm(qlogis(0.9), 1 / 0.5^2) # mean = 0.9
-    wolf_f[t] ~ dgamma(2, 2)   # mean = 1, but tighter than gamma(1,1)
+    logit(wolf_s_p[t]) ~ dnorm(qlogis(0.5), 1 / 0.5^2) # mean pup survival = 0.5
+    logit(wolf_s_a[t]) ~ dnorm(qlogis(0.9), 1 / 0.5^2) # mean adult survival = 0.9
+    wolf_f[t] ~ dgamma(2, 2)   # mean fecundity = 1, but tighter than gamma(1,1)
   }
   
   wolf_sigma_obs ~ dunif(0.05, 2)
@@ -282,6 +282,7 @@ icm_code <- nimbleCode({
   
   wolf_N_a[1] ~ dpois(14) # 14 wolves originally introduced the first year
   
+  # wolf state-space model
   for (t in 1:n_years) {
     
     # expected summer pups
@@ -504,8 +505,8 @@ icm_params <- c(
 
 set.seed(17)
 nc <- 3
-ni <- 100
-nb <- 20
+ni <- 100000
+nb <- 20000
 th <- 4
 
 start_time <- Sys.time()
@@ -533,7 +534,7 @@ print(paste0('Model runtime: ',
 
 # SAVE OUTPUT
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
-save.image('data/outputs/ICM_environment_2026-04-09.RData')
+save.image('data/outputs/ICM_environment_2026-04-14.RData')
 
 ################################################################################
 ###########--------------------- Results ----------------------#################
