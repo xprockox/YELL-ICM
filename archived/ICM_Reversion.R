@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Combines elk IPM + wolf IPM in one NIMBLE model
-### Last updated: Apr. 16, 2026
+### Last updated: Mar. 31, 2026
 ### xprockox@gmail.com
 
 ################################################################################
@@ -163,28 +163,6 @@ if (elk_n_years != wolf_n_years) {
 }
 
 n_years <- elk_n_years
-
-
-################################################################################
-############-------------- Load in covariates -------------#####################
-################################################################################
-
-# then covariates
-annual_prism <- read.csv('data/covariates/prism_annual_precip_tmean.csv')
-bison <- read.csv('data/covariates/NR_Bison_Abundance.csv') %>%
-  rename(year = Year)
-
-# bind data into one dataframe 'covars"
-covars <- left_join(annual_prism, bison)
-
-# trim covariate data to shared years 
-covars <- covars[covars$year %in% elk_dat_n$year,]
-
-# standardize all covariates except year
-covars_std <- covars %>%
-  mutate(
-    across(-year, ~ as.numeric(scale(.)))
-  )
 
 ################################################################################
 ############---------------- ICM NIMBLE Code --------------#####################
@@ -359,92 +337,64 @@ icm_code <- nimbleCode({
   
   # Priors for elk regression coefficients
   beta0_calfSurv ~ dnorm(qlogis(0.22), 1 / 0.3^2) # mean = 0.22
-  beta1_calfSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
-  beta2_calfSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
-  
+  beta1_calfSurv ~ dnorm(0, 1 / 0.3^2)
+
   beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2) # mean = 0.90
-  beta1_yaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
-  beta2_yaSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
-  
+  beta1_yaSurv ~ dnorm(0, 1 / 0.3^2)
+
   beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2) # mean = 0.80
-  beta1_oaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
-  beta2_oaSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
-  
+  beta1_oaSurv ~ dnorm(0, 1 / 0.3^2)
+
   # Priors for elk random year-effect SDs
   sigma_calf ~ dunif(0, 0.5)
   tau_calf <- 1 / (sigma_calf^2)
-  
+
   sigma_ya ~ dunif(0, 0.3)
   tau_ya <- 1 / (sigma_ya^2)
-  
+
   sigma_oa ~ dunif(0, 0.3)
   tau_oa <- 1 / (sigma_oa^2)
-  
-  # Priors for wolf regression coefficients
+
+  # Priors for regression coefficients
   beta0_wpupSurv ~ dnorm(qlogis(0.5), 1 / 0.3^2) # mean = 0.22
-  beta1_wpupSurv_elkN ~ dnorm(0, 1 / 0.3^2)
-  beta2_wpupSurv_bisonN ~ dnorm(0, 1 / 0.3^2)
-  
+  beta1_wpupSurv ~ dnorm(0, 1 / 0.3^2)
+
   beta0_wadSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2) # mean = 0.90
-  beta1_wadSurv_elkN ~ dnorm(0, 1 / 0.3^2)
-  beta2_wadSurv_bisonN ~ dnorm(0, 1 / 0.3^2)
-  
+  beta1_wadSurv ~ dnorm(0, 1 / 0.3^2)
+
   # Priors for wolf random year-effect SDs
   sigma_wpup ~ dunif(0, 0.5)
   tau_wpup <- 1 / (sigma_wpup^2)
-  
+
   sigma_wad ~ dunif(0, 0.3)
   tau_wad <- 1 / (sigma_wad^2)
-  
+
   # Year-specific regressions
   for (t in 1:n_years) {
-    
+
     # elk random year effects
     eps_elk_s_c[t] ~ dnorm(0, tau_calf)
     eps_elk_s_ya[t] ~ dnorm(0, tau_ya)
     eps_elk_s_oa[t] ~ dnorm(0, tau_oa)
-    
-    # wolf random year effects
+
+    # elk random year effects
     eps_wolf_s_p[t] ~ dnorm(0, tau_wpup)
     eps_wolf_s_a[t] ~ dnorm(0, tau_wad)
-    
+
     # standardize wolf abundance
     wolf_N_tot_std[t] <- (wolf_N_tot[t] - wolf_tot_mean) / wolf_tot_sd
-    
+
     # standardize elk abundance
     elk_N_female_std[t] <- (elk_N_female[t] - elk_N_female_mean) / elk_N_female_sd
-    
+
     # elk regression models
-    logit(elk_s_c[t])  <- 
-      beta0_calfSurv + 
-      beta1_calfSurv_wolfN * wolf_N_tot_std[t] + 
-      beta2_calfSurv_wintPPT * wintPPT[t] + 
-      eps_elk_s_c[t]
-    
-    logit(elk_s_ya[t]) <- 
-      beta0_yaSurv + 
-      beta1_yaSurv_wolfN * wolf_N_tot_std[t] + 
-      beta2_yaSurv_wintPPT * wintPPT[t] + 
-      eps_elk_s_ya[t]
-    
-    logit(elk_s_oa[t]) <- 
-      beta0_oaSurv + 
-      beta1_oaSurv_wolfN * wolf_N_tot_std[t] + 
-      beta2_oaSurv_wintPPT * wintPPT[t] + 
-      eps_elk_s_oa[t]
-    
+    logit(elk_s_c[t])  <- beta0_calfSurv + beta1_calfSurv * wolf_N_tot_std[t] + eps_elk_s_c[t]
+    logit(elk_s_ya[t]) <- beta0_yaSurv   + beta1_yaSurv   * wolf_N_tot_std[t] + eps_elk_s_ya[t]
+    logit(elk_s_oa[t]) <- beta0_oaSurv   + beta1_oaSurv   * wolf_N_tot_std[t] + eps_elk_s_oa[t]
+
     # wolf regression models
-    logit(wolf_s_p[t])  <- 
-      beta0_wpupSurv + 
-      beta1_wpupSurv_elkN * elk_N_female_std[t] + 
-      beta2_wpupSurv_bisonN * bisonN[t] +
-      eps_wolf_s_p[t]
-    
-    logit(wolf_s_a[t]) <- 
-      beta0_wadSurv + 
-      beta1_wadSurv_elkN * elk_N_female_std[t] + 
-      beta2_wadSurv_bisonN * bisonN[t] +
-      eps_wolf_s_a[t]
+    logit(wolf_s_p[t])  <- beta0_wpupSurv + beta1_wpupSurv * elk_N_female_std[t] + eps_wolf_s_p[t]
+    logit(wolf_s_a[t]) <- beta0_wadSurv   + beta1_wadSurv   * elk_N_female_std[t] + eps_wolf_s_a[t]
   }
 })
 
@@ -497,11 +447,7 @@ icm_data <- list(
   wolf_y = wolf_y,
   wolf_is_class1 = wolf_is_class1,
   wolf_is_class2 = wolf_is_class2,
-  wolf_first_seen = wolf_first_seen,
-  
-  # covariates
-  wintPPT = covars_std$winter_ppt_mm,
-  bisonN = covars_std$NR_Bison
+  wolf_first_seen = wolf_first_seen
 )
 
 ################################################################################
@@ -621,17 +567,17 @@ icm_params <- c(
   "wolf_N_p_sum", "wolf_N_p", "wolf_N_a", "wolf_N_tot",
   
   # elk regression coefficients
-  'beta0_calfSurv', 'beta1_calfSurv_wolfN', 'beta2_calfSurv_wintPPT',
-  'beta0_yaSurv', 'beta1_yaSurv_wolfN', 'beta2_yaSurv_wintPPT',
-  'beta0_oaSurv', 'beta1_oaSurv_wolfN', 'beta2_oaSurv_wintPPT',
-  
+  'beta0_calfSurv', 'beta1_calfSurv',
+  'beta0_yaSurv', 'beta1_yaSurv',
+  'beta0_oaSurv', 'beta1_oaSurv',
+
   "sigma_calf", "sigma_ya", "sigma_oa",
   "eps_elk_s_c", "eps_elk_s_ya", "eps_elk_s_oa",
   
   # wolf regression coefficients
-  'beta0_wpupSurv', 'beta1_wpupSurv_elkN', 'beta2_wpupSurv_bisonN',
-  'beta0_wadSurv', 'beta1_wadSurv_elkN', 'beta2_wadSurv_bisonN',
-  
+  'beta0_wpupSurv', 'beta1_wpupSurv',
+  'beta0_wadSurv', 'beta1_wadSurv',
+
   "sigma_wpup", "sigma_wad",
   "eps_wolf_s_p", "eps_wolf_s_a"
 )
@@ -820,11 +766,11 @@ bad_wolf_vrate_rhats
 reg_coefs <- MCMCsummary(
   icm_clean,
   params = c(
-    "beta0_calfSurv", "beta1_calfSurv_wolfN",
-    "beta0_yaSurv", "beta1_yaSurv_wolfN",
-    "beta0_oaSurv", "beta1_oaSurv_wolfN",
-    "beta0_wpupSurv", "beta1_wpupSurv_elkN",
-    "beta0_wadSurv", "beta1_wadSurv_elkN"
+    "beta0_calfSurv", "beta1_calfSurv",
+    "beta0_yaSurv", "beta1_yaSurv",
+    "beta0_oaSurv", "beta1_oaSurv",
+    "beta0_wpupSurv", "beta1_wpupSurv",
+    "beta0_wadSurv", "beta1_wadSurv"
   )
 )
 
@@ -1161,7 +1107,7 @@ x_grid_std <- (x_grid - icm_constants$wolf_tot_mean) / icm_constants$wolf_tot_sd
 
 # fitted values for calf survival
 pred_calf <- sapply(x_grid_std, function(x) {
-  plogis(post_mat[, "beta0_calfSurv"] + post_mat[, "beta1_calfSurv_wolfN"] * x)
+  plogis(post_mat[, "beta0_calfSurv"] + post_mat[, "beta1_calfSurv"] * x)
 })
 
 line_calf <- data.frame(
@@ -1174,7 +1120,7 @@ line_calf <- data.frame(
 
 # fitted values for young adult survival
 pred_ya <- sapply(x_grid_std, function(x) {
-  plogis(post_mat[, "beta0_yaSurv"] + post_mat[, "beta1_yaSurv_wolfN"] * x)
+  plogis(post_mat[, "beta0_yaSurv"] + post_mat[, "beta1_yaSurv"] * x)
 })
 
 line_ya <- data.frame(
@@ -1187,7 +1133,7 @@ line_ya <- data.frame(
 
 # fitted values for old adult survival
 pred_oa <- sapply(x_grid_std, function(x) {
-  plogis(post_mat[, "beta0_oaSurv"] + post_mat[, "beta1_oaSurv_wolfN"] * x)
+  plogis(post_mat[, "beta0_oaSurv"] + post_mat[, "beta1_oaSurv"] * x)
 })
 
 line_oa <- data.frame(
@@ -1234,11 +1180,11 @@ main_plot
 # then extract posterior densities of coefficients
 beta_df <- data.frame(
   beta0_calfSurv = post_mat[, "beta0_calfSurv"],
-  beta1_calfSurv_wolfN = post_mat[, "beta1_calfSurv_wolfN"],
+  beta1_calfSurv = post_mat[, "beta1_calfSurv"],
   beta0_yaSurv = post_mat[, "beta0_yaSurv"],
-  beta1_yaSurv_wolfN = post_mat[, "beta1_yaSurv_wolfN"],
+  beta1_yaSurv = post_mat[, "beta1_yaSurv"],
   beta0_oaSurv = post_mat[, "beta0_oaSurv"],
-  beta1_oaSurv_wolfN = post_mat[, "beta1_oaSurv_wolfN"]
+  beta1_oaSurv = post_mat[, "beta1_oaSurv"]
 )
 
 # reshape dataframe
@@ -1249,9 +1195,9 @@ beta_long <- beta_df %>%
 beta_long$parameter <- factor(
   beta_long$parameter,
   levels = c(
-    "beta0_calfSurv", "beta1_calfSurv_wolfN",
-    "beta0_yaSurv", "beta1_yaSurv_wolfN",
-    "beta0_oaSurv", "beta1_oaSurv_wolfN"
+    "beta0_calfSurv", "beta1_calfSurv",
+    "beta0_yaSurv", "beta1_yaSurv",
+    "beta0_oaSurv", "beta1_oaSurv"
   ),
   labels = c(
     "Calf intercept", "Calf wolf effect",
@@ -1341,7 +1287,7 @@ x_grid_elk_std <- (x_grid_wolf - icm_constants$elk_N_female_mean) / icm_constant
 
 # fitted values for wolf pup survival
 pred_wpup <- sapply(x_grid_elk_std, function(x) {
-  plogis(post_mat[, "beta0_wpupSurv"] + post_mat[, "beta1_wpupSurv_elkN"] * x)
+  plogis(post_mat[, "beta0_wpupSurv"] + post_mat[, "beta1_wpupSurv"] * x)
 })
 
 line_wpup <- data.frame(
@@ -1354,7 +1300,7 @@ line_wpup <- data.frame(
 
 # fitted values for wolf adult survival
 pred_wad <- sapply(x_grid_elk_std, function(x) {
-  plogis(post_mat[, "beta0_wadSurv"] + post_mat[, "beta1_wadSurv_elkN"] * x)
+  plogis(post_mat[, "beta0_wadSurv"] + post_mat[, "beta1_wadSurv"] * x)
 })
 
 line_wad <- data.frame(
@@ -1400,9 +1346,9 @@ wolf_main_plot
 # posterior densities of wolf regression coefficients
 wolf_beta_df <- data.frame(
   beta0_wpupSurv = post_mat[, "beta0_wpupSurv"],
-  beta1_wpupSurv_elkN = post_mat[, "beta1_wpupSurv_elkN"],
+  beta1_wpupSurv = post_mat[, "beta1_wpupSurv"],
   beta0_wadSurv = post_mat[, "beta0_wadSurv"],
-  beta1_wadSurv_elkN = post_mat[, "beta1_wadSurv_elkN"]
+  beta1_wadSurv = post_mat[, "beta1_wadSurv"]
 )
 
 wolf_beta_long <- wolf_beta_df %>%
@@ -1411,8 +1357,8 @@ wolf_beta_long <- wolf_beta_df %>%
 wolf_beta_long$parameter <- factor(
   wolf_beta_long$parameter,
   levels = c(
-    "beta0_wpupSurv", "beta1_wpupSurv_elkN",
-    "beta0_wadSurv", "beta1_wadSurv_elkN"
+    "beta0_wpupSurv", "beta1_wpupSurv",
+    "beta0_wadSurv", "beta1_wadSurv"
   ),
   labels = c(
     "Wolf pup intercept", "Wolf pup elk effect",
