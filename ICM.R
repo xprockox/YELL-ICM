@@ -671,9 +671,9 @@ print(paste0('Model runtime: ',
 
 # SAVE OUTPUT
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
-save.image('data/outputs/ICM_environment_2026-04-16.RData')
+# save.image('data/outputs/ICM_environment_2026-04-16.RData')
 
-# load('data/outputs/ICM_environment_2026-04-16.RData')
+load('data/outputs/ICM_environment_2026-04-16.RData')
 
 ################################################################################
 ############------- Reload packages if data loaded in --------##################
@@ -689,27 +689,6 @@ library(coda)
 library(stringr)
 library(cowplot)
 library(popbio)
-
-################################################################################
-############--------------- Load covariates ---------------#####################
-################################################################################
-
-# load data
-annual_prism <- read.csv('data/covariates/prism_annual_precip_tmean.csv')
-bison <- read.csv('data/covariates/NR_Bison_Abundance.csv') %>%
-  rename(year = Year)
-
-# bind data into one dataframe 'covars"
-covars <- left_join(annual_prism, bison)
-
-# trim covariate data to shared years 
-covars <- covars[covars$year %in% community_years,]
-
-# standardize all covariates except year
-covars_std <- covars %>%
-  mutate(
-    across(-year, ~ as.numeric(scale(.)))
-  )
 
 ################################################################################
 ###########--------------------- Results ----------------------#################
@@ -1095,7 +1074,7 @@ wolf_vrate_plot <- ggplot(wolf_vrates2, aes(x = year, y = mean)) +
 wolf_vrate_plot
 
 ################################################################################
-##########---------- Regression plots + coefficient densities ---------##########
+#########---------- Regression plots + coefficient densities ---------##########
 ################################################################################
 
 # yearly wolf abundance summaries
@@ -1143,76 +1122,98 @@ elk_oa_pts <- elk_vrates2 %>%
 elk_surv_pts <- bind_rows(elk_calf_pts, elk_ya_pts, elk_oa_pts)
 
 # join elk and wolf estimates
-plot_df <- elk_surv_pts %>%
-  left_join(wolf_pts, by = "year")
+plot_df_elk <- elk_surv_pts %>%
+  left_join(wolf_pts, by = "year") %>%
+  left_join(
+    covars %>%
+      select(year, winter_ppt_mm),
+    by = "year"
+  )
 
 # pull posterior draws from cleaned chains
 post_mat <- do.call(rbind, lapply(icm_clean, as.matrix))
 
+################################################################################
+########---------------- Wolf abundance effect on elk ----------------##########
+################################################################################
+
 # x grid on raw wolf abundance scale
-x_grid <- seq(
-  min(plot_df$wolf_N_tot, na.rm = TRUE),
-  max(plot_df$wolf_N_tot, na.rm = TRUE),
+x_grid_wolf <- seq(
+  min(plot_df_elk$wolf_N_tot, na.rm = TRUE),
+  max(plot_df_elk$wolf_N_tot, na.rm = TRUE),
   length.out = 200
 )
 
 # standardize internally because model used standardized wolf abundance
-x_grid_std <- (x_grid - icm_constants$wolf_tot_mean) / icm_constants$wolf_tot_sd
+x_grid_wolf_std <- (x_grid_wolf - icm_constants$wolf_tot_mean) / icm_constants$wolf_tot_sd
+
+# hold winter precipitation constant at mean standardized value
+winterPPT_mean_std <- mean(covars_std$winter_ppt_mm, na.rm = TRUE)
 
 # fitted values for calf survival
-pred_calf <- sapply(x_grid_std, function(x) {
-  plogis(post_mat[, "beta0_calfSurv"] + post_mat[, "beta1_calfSurv_wolfN"] * x)
+pred_calf_wolf <- sapply(x_grid_wolf_std, function(x) {
+  plogis(
+    post_mat[, "beta0_calfSurv"] +
+      post_mat[, "beta1_calfSurv_wolfN"] * x +
+      post_mat[, "beta2_calfSurv_wintPPT"] * winterPPT_mean_std
+  )
 })
 
-line_calf <- data.frame(
-  wolf_N_tot = x_grid,
-  elk_surv = apply(pred_calf, 2, mean),
-  elk_low = apply(pred_calf, 2, quantile, probs = 0.025),
-  elk_high = apply(pred_calf, 2, quantile, probs = 0.975),
+line_calf_wolf <- data.frame(
+  x = x_grid_wolf,
+  elk_surv = apply(pred_calf_wolf, 2, mean),
+  elk_low = apply(pred_calf_wolf, 2, quantile, probs = 0.025, na.rm = TRUE),
+  elk_high = apply(pred_calf_wolf, 2, quantile, probs = 0.975, na.rm = TRUE),
   stage = "Calf survival"
 )
 
 # fitted values for young adult survival
-pred_ya <- sapply(x_grid_std, function(x) {
-  plogis(post_mat[, "beta0_yaSurv"] + post_mat[, "beta1_yaSurv_wolfN"] * x)
+pred_ya_wolf <- sapply(x_grid_wolf_std, function(x) {
+  plogis(
+    post_mat[, "beta0_yaSurv"] +
+      post_mat[, "beta1_yaSurv_wolfN"] * x +
+      post_mat[, "beta2_yaSurv_wintPPT"] * winterPPT_mean_std
+  )
 })
 
-line_ya <- data.frame(
-  wolf_N_tot = x_grid,
-  elk_surv = apply(pred_ya, 2, mean),
-  elk_low = apply(pred_ya, 2, quantile, probs = 0.025),
-  elk_high = apply(pred_ya, 2, quantile, probs = 0.975),
+line_ya_wolf <- data.frame(
+  x = x_grid_wolf,
+  elk_surv = apply(pred_ya_wolf, 2, mean),
+  elk_low = apply(pred_ya_wolf, 2, quantile, probs = 0.025, na.rm = TRUE),
+  elk_high = apply(pred_ya_wolf, 2, quantile, probs = 0.975, na.rm = TRUE),
   stage = "Young adult survival"
 )
 
 # fitted values for old adult survival
-pred_oa <- sapply(x_grid_std, function(x) {
-  plogis(post_mat[, "beta0_oaSurv"] + post_mat[, "beta1_oaSurv_wolfN"] * x)
+pred_oa_wolf <- sapply(x_grid_wolf_std, function(x) {
+  plogis(
+    post_mat[, "beta0_oaSurv"] +
+      post_mat[, "beta1_oaSurv_wolfN"] * x +
+      post_mat[, "beta2_oaSurv_wintPPT"] * winterPPT_mean_std
+  )
 })
 
-line_oa <- data.frame(
-  wolf_N_tot = x_grid,
-  elk_surv = apply(pred_oa, 2, mean),
-  elk_low = apply(pred_oa, 2, quantile, probs = 0.025),
-  elk_high = apply(pred_oa, 2, quantile, probs = 0.975),
+line_oa_wolf <- data.frame(
+  x = x_grid_wolf,
+  elk_surv = apply(pred_oa_wolf, 2, mean),
+  elk_low = apply(pred_oa_wolf, 2, quantile, probs = 0.025, na.rm = TRUE),
+  elk_high = apply(pred_oa_wolf, 2, quantile, probs = 0.975, na.rm = TRUE),
   stage = "Old adult survival"
 )
 
-# combine survival values from all stages
-line_df <- bind_rows(line_calf, line_ya, line_oa)
+line_df_wolf_elk <- bind_rows(line_calf_wolf, line_ya_wolf, line_oa_wolf)
 
-# first plot: wolf abundance vs. all three stages' survival 
-main_plot <- ggplot(plot_df, aes(x = wolf_N_tot, y = elk_surv)) +
+wolf_plot_elk <- ggplot(plot_df_elk, aes(x = wolf_N_tot, y = elk_surv)) +
   geom_ribbon(
-    data = line_df,
-    aes(x = wolf_N_tot, ymin = elk_low, ymax = elk_high),
+    data = line_df_wolf_elk,
+    aes(x = x, ymin = elk_low, ymax = elk_high),
     inherit.aes = FALSE,
     fill = "#6F263D",
     alpha = 0.25
   ) +
   geom_line(
-    data = line_df,
-    aes(x = wolf_N_tot, y = elk_surv),
+    data = line_df_wolf_elk,
+    aes(x = x, y = elk_surv),
     inherit.aes = FALSE,
     color = "#6F263D",
     linewidth = 1
@@ -1225,67 +1226,107 @@ main_plot <- ggplot(plot_df, aes(x = wolf_N_tot, y = elk_surv)) +
   labs(
     x = "Wolf abundance",
     y = "Elk survival",
-    title = "Estimated effect of wolf abundance on elk survival"
+    title = "Estimated effect of wolf abundance on elk survival",
+    subtitle = "Winter precipitation held at its mean"
   )
 
-# view main plot
-main_plot
+wolf_plot_elk
 
-# then extract posterior densities of coefficients
-beta_df <- data.frame(
-  beta0_calfSurv = post_mat[, "beta0_calfSurv"],
-  beta1_calfSurv_wolfN = post_mat[, "beta1_calfSurv_wolfN"],
-  beta0_yaSurv = post_mat[, "beta0_yaSurv"],
-  beta1_yaSurv_wolfN = post_mat[, "beta1_yaSurv_wolfN"],
-  beta0_oaSurv = post_mat[, "beta0_oaSurv"],
-  beta1_oaSurv_wolfN = post_mat[, "beta1_oaSurv_wolfN"]
+################################################################################
+#######------------- Winter precipitation effect on elk ----------------########
+################################################################################
+
+# x grid on raw winter precipitation scale
+x_grid_ppt_raw <- seq(
+  min(covars$winter_ppt_mm, na.rm = TRUE),
+  max(covars$winter_ppt_mm, na.rm = TRUE),
+  length.out = 200
 )
 
-# reshape dataframe
-beta_long <- beta_df %>%
-  pivot_longer(cols = everything(), names_to = "parameter", values_to = "value")
+# convert raw ppt grid to standardized values used in the model
+ppt_mean_raw <- mean(covars$winter_ppt_mm, na.rm = TRUE)
+ppt_sd_raw <- sd(covars$winter_ppt_mm, na.rm = TRUE)
+x_grid_ppt_std <- (x_grid_ppt_raw - ppt_mean_raw) / ppt_sd_raw
 
-# relabel
-beta_long$parameter <- factor(
-  beta_long$parameter,
-  levels = c(
-    "beta0_calfSurv", "beta1_calfSurv_wolfN",
-    "beta0_yaSurv", "beta1_yaSurv_wolfN",
-    "beta0_oaSurv", "beta1_oaSurv_wolfN"
+# hold wolf abundance constant at mean standardized value
+wolf_mean_std <- mean((wolf_pts$wolf_N_tot - icm_constants$wolf_tot_mean) / icm_constants$wolf_tot_sd,
+                      na.rm = TRUE)
+
+pred_calf_ppt <- sapply(x_grid_ppt_std, function(x) {
+  plogis(
+    post_mat[, "beta0_calfSurv"] +
+      post_mat[, "beta1_calfSurv_wolfN"] * wolf_mean_std +
+      post_mat[, "beta2_calfSurv_wintPPT"] * x
+  )
+})
+
+pred_ya_ppt <- sapply(x_grid_ppt_std, function(x) {
+  plogis(
+    post_mat[, "beta0_yaSurv"] +
+      post_mat[, "beta1_yaSurv_wolfN"] * wolf_mean_std +
+      post_mat[, "beta2_yaSurv_wintPPT"] * x
+  )
+})
+
+pred_oa_ppt <- sapply(x_grid_ppt_std, function(x) {
+  plogis(
+    post_mat[, "beta0_oaSurv"] +
+      post_mat[, "beta1_oaSurv_wolfN"] * wolf_mean_std +
+      post_mat[, "beta2_oaSurv_wintPPT"] * x
+  )
+})
+
+line_df_ppt_elk <- bind_rows(
+  data.frame(
+    x = x_grid_ppt_raw,
+    elk_surv = apply(pred_calf_ppt, 2, mean),
+    elk_low = apply(pred_calf_ppt, 2, quantile, probs = 0.025, na.rm = TRUE),
+    elk_high = apply(pred_calf_ppt, 2, quantile, probs = 0.975, na.rm = TRUE),
+    stage = "Calf survival"
   ),
-  labels = c(
-    "Calf intercept", "Calf wolf effect",
-    "YA intercept", "YA wolf effect",
-    "OA intercept", "OA wolf effect"
+  data.frame(
+    x = x_grid_ppt_raw,
+    elk_surv = apply(pred_ya_ppt, 2, mean),
+    elk_low = apply(pred_ya_ppt, 2, quantile, probs = 0.025, na.rm = TRUE),
+    elk_high = apply(pred_ya_ppt, 2, quantile, probs = 0.975, na.rm = TRUE),
+    stage = "Young adult survival"
+  ),
+  data.frame(
+    x = x_grid_ppt_raw,
+    elk_surv = apply(pred_oa_ppt, 2, mean),
+    elk_low = apply(pred_oa_ppt, 2, quantile, probs = 0.025, na.rm = TRUE),
+    elk_high = apply(pred_oa_ppt, 2, quantile, probs = 0.975, na.rm = TRUE),
+    stage = "Old adult survival"
   )
 )
 
-# generate coefficient estimate density plots
-coef_plot <- ggplot(beta_long, aes(x = value)) +
-  geom_density(fill = "#236192", alpha = 0.45) +
-  geom_vline(xintercept = 0, linetype = 2) +
-  facet_wrap(~parameter, scales = "free", ncol = 2) +
+ppt_plot_elk <- ggplot(plot_df_elk, aes(x = winter_ppt_mm, y = elk_surv)) +
+  geom_ribbon(
+    data = line_df_ppt_elk,
+    aes(x = x, ymin = elk_low, ymax = elk_high),
+    inherit.aes = FALSE,
+    fill = "#236192",
+    alpha = 0.25
+  ) +
+  geom_line(
+    data = line_df_ppt_elk,
+    aes(x = x, y = elk_surv),
+    inherit.aes = FALSE,
+    color = "#236192",
+    linewidth = 1
+  ) +
+  geom_errorbar(aes(ymin = elk_low, ymax = elk_high), width = 0) +
+  geom_point(shape = 21, fill = "gold", color = "black", size = 2.5) +
+  facet_wrap(~stage, scales = "free_y") +
   theme_classic() +
   labs(
-    x = "Posterior value",
-    y = "Density",
-    title = "Posterior distributions of regression coefficients"
+    x = "Winter precipitation",
+    y = "Elk survival",
+    title = "Estimated effect of winter precipitation on elk survival",
+    subtitle = "Wolf abundance held at its mean"
   )
 
-# view coef plot
-coef_plot
-
-# piece the main_plot and coef_plot together 
-final_plot <- plot_grid(
-  main_plot,
-  coef_plot,
-  ncol = 1,
-  rel_heights = c(2, 1.5),
-  labels = c("A", "C")
-)
-
-# view final plot
-final_plot
+ppt_plot_elk
 
 ################################################################################
 ##########---------- Wolf regression plots + coefficient densities ----##########
@@ -1322,64 +1363,77 @@ wolf_ad_pts <- wolf_vrates2 %>%
     stage = "Adult survival"
   )
 
-# combine wolf survival summaries
 wolf_surv_pts <- bind_rows(wolf_pup_pts, wolf_ad_pts)
 
-# join wolf survival and elk abundance
 wolf_plot_df <- wolf_surv_pts %>%
-  left_join(elk_abund_pts, by = "year")
+  left_join(elk_abund_pts, by = "year") %>%
+  left_join(
+    covars %>%
+      select(year, NR_Bison),
+    by = "year"
+  )
+
+################################################################################
+########------------- Elk abundance effect on wolf survival -------------#######
+################################################################################
 
 # x grid on raw elk female abundance scale
-x_grid_wolf <- seq(
+x_grid_elk <- seq(
   min(wolf_plot_df$elk_N_female, na.rm = TRUE),
   max(wolf_plot_df$elk_N_female, na.rm = TRUE),
   length.out = 200
 )
 
 # standardize internally because model used standardized elk abundance
-x_grid_elk_std <- (x_grid_wolf - icm_constants$elk_N_female_mean) / icm_constants$elk_N_female_sd
+x_grid_elk_std <- (x_grid_elk - icm_constants$elk_N_female_mean) / icm_constants$elk_N_female_sd
 
-# fitted values for wolf pup survival
-pred_wpup <- sapply(x_grid_elk_std, function(x) {
-  plogis(post_mat[, "beta0_wpupSurv"] + post_mat[, "beta1_wpupSurv_elkN"] * x)
+# hold bison abundance constant at mean standardized value
+bisonN_mean_std <- mean(covars_std$NR_Bison, na.rm = TRUE)
+
+pred_wpup_elk <- sapply(x_grid_elk_std, function(x) {
+  plogis(
+    post_mat[, "beta0_wpupSurv"] +
+      post_mat[, "beta1_wpupSurv_elkN"] * x +
+      post_mat[, "beta2_wpupSurv_bisonN"] * bisonN_mean_std
+  )
 })
 
-line_wpup <- data.frame(
-  elk_N_female = x_grid_wolf,
-  wolf_surv = apply(pred_wpup, 2, mean),
-  wolf_low = apply(pred_wpup, 2, quantile, probs = 0.025),
-  wolf_high = apply(pred_wpup, 2, quantile, probs = 0.975),
-  stage = "Pup survival"
-)
-
-# fitted values for wolf adult survival
-pred_wad <- sapply(x_grid_elk_std, function(x) {
-  plogis(post_mat[, "beta0_wadSurv"] + post_mat[, "beta1_wadSurv_elkN"] * x)
+pred_wad_elk <- sapply(x_grid_elk_std, function(x) {
+  plogis(
+    post_mat[, "beta0_wadSurv"] +
+      post_mat[, "beta1_wadSurv_elkN"] * x +
+      post_mat[, "beta2_wadSurv_bisonN"] * bisonN_mean_std
+  )
 })
 
-line_wad <- data.frame(
-  elk_N_female = x_grid_wolf,
-  wolf_surv = apply(pred_wad, 2, mean),
-  wolf_low = apply(pred_wad, 2, quantile, probs = 0.025),
-  wolf_high = apply(pred_wad, 2, quantile, probs = 0.975),
-  stage = "Adult survival"
+line_df_elk_wolf <- bind_rows(
+  data.frame(
+    x = x_grid_elk,
+    wolf_surv = apply(pred_wpup_elk, 2, mean),
+    wolf_low = apply(pred_wpup_elk, 2, quantile, probs = 0.025, na.rm = TRUE),
+    wolf_high = apply(pred_wpup_elk, 2, quantile, probs = 0.975, na.rm = TRUE),
+    stage = "Pup survival"
+  ),
+  data.frame(
+    x = x_grid_elk,
+    wolf_surv = apply(pred_wad_elk, 2, mean),
+    wolf_low = apply(pred_wad_elk, 2, quantile, probs = 0.025, na.rm = TRUE),
+    wolf_high = apply(pred_wad_elk, 2, quantile, probs = 0.975, na.rm = TRUE),
+    stage = "Adult survival"
+  )
 )
 
-# combine wolf fitted values
-wolf_line_df <- bind_rows(line_wpup, line_wad)
-
-# main wolf regression plot
 wolf_main_plot <- ggplot(wolf_plot_df, aes(x = elk_N_female, y = wolf_surv)) +
   geom_ribbon(
-    data = wolf_line_df,
-    aes(x = elk_N_female, ymin = wolf_low, ymax = wolf_high),
+    data = line_df_elk_wolf,
+    aes(x = x, ymin = wolf_low, ymax = wolf_high),
     inherit.aes = FALSE,
     fill = "#236192",
     alpha = 0.25
   ) +
   geom_line(
-    data = wolf_line_df,
-    aes(x = elk_N_female, y = wolf_surv),
+    data = line_df_elk_wolf,
+    aes(x = x, y = wolf_surv),
     inherit.aes = FALSE,
     color = "#236192",
     linewidth = 1
@@ -1392,17 +1446,149 @@ wolf_main_plot <- ggplot(wolf_plot_df, aes(x = elk_N_female, y = wolf_surv)) +
   labs(
     x = "Elk female abundance",
     y = "Wolf survival",
-    title = "Estimated effect of elk abundance on wolf survival"
+    title = "Estimated effect of elk abundance on wolf survival",
+    subtitle = "Bison abundance held at its mean"
   )
 
 wolf_main_plot
 
-# posterior densities of wolf regression coefficients
+################################################################################
+##########--------------- Bison effect on wolf survival ----------------########
+################################################################################
+
+# x grid on raw bison abundance scale
+x_grid_bison_raw <- seq(
+  min(covars$NR_Bison, na.rm = TRUE),
+  max(covars$NR_Bison, na.rm = TRUE),
+  length.out = 200
+)
+
+# convert raw bison grid to standardized values used in the model
+bison_mean_raw <- mean(covars$NR_Bison, na.rm = TRUE)
+bison_sd_raw <- sd(covars$NR_Bison, na.rm = TRUE)
+x_grid_bison_std <- (x_grid_bison_raw - bison_mean_raw) / bison_sd_raw
+
+# hold elk abundance constant at mean standardized value
+elk_mean_std <- mean((elk_abund_pts$elk_N_female - icm_constants$elk_N_female_mean) /
+                       icm_constants$elk_N_female_sd,
+                     na.rm = TRUE)
+
+pred_wpup_bison <- sapply(x_grid_bison_std, function(x) {
+  plogis(
+    post_mat[, "beta0_wpupSurv"] +
+      post_mat[, "beta1_wpupSurv_elkN"] * elk_mean_std +
+      post_mat[, "beta2_wpupSurv_bisonN"] * x
+  )
+})
+
+pred_wad_bison <- sapply(x_grid_bison_std, function(x) {
+  plogis(
+    post_mat[, "beta0_wadSurv"] +
+      post_mat[, "beta1_wadSurv_elkN"] * elk_mean_std +
+      post_mat[, "beta2_wadSurv_bisonN"] * x
+  )
+})
+
+line_df_bison_wolf <- bind_rows(
+  data.frame(
+    x = x_grid_bison_raw,
+    wolf_surv = apply(pred_wpup_bison, 2, mean),
+    wolf_low = apply(pred_wpup_bison, 2, quantile, probs = 0.025, na.rm = TRUE),
+    wolf_high = apply(pred_wpup_bison, 2, quantile, probs = 0.975, na.rm = TRUE),
+    stage = "Pup survival"
+  ),
+  data.frame(
+    x = x_grid_bison_raw,
+    wolf_surv = apply(pred_wad_bison, 2, mean),
+    wolf_low = apply(pred_wad_bison, 2, quantile, probs = 0.025, na.rm = TRUE),
+    wolf_high = apply(pred_wad_bison, 2, quantile, probs = 0.975, na.rm = TRUE),
+    stage = "Adult survival"
+  )
+)
+
+bison_plot_wolf <- ggplot(wolf_plot_df, aes(x = NR_Bison, y = wolf_surv)) +
+  geom_ribbon(
+    data = line_df_bison_wolf,
+    aes(x = x, ymin = wolf_low, ymax = wolf_high),
+    inherit.aes = FALSE,
+    fill = "#6F263D",
+    alpha = 0.25
+  ) +
+  geom_line(
+    data = line_df_bison_wolf,
+    aes(x = x, y = wolf_surv),
+    inherit.aes = FALSE,
+    color = "#6F263D",
+    linewidth = 1
+  ) +
+  geom_errorbar(aes(ymin = wolf_low, ymax = wolf_high), width = 0) +
+  geom_point(shape = 21, fill = "gold", color = "black", size = 2.5) +
+  facet_wrap(~stage, scales = "free_y") +
+  theme_classic() +
+  labs(
+    x = "Bison abundance",
+    y = "Wolf survival",
+    title = "Estimated effect of bison abundance on wolf survival",
+    subtitle = "Elk abundance held at its mean"
+  )
+
+bison_plot_wolf
+
+################################################################################
+########--------------- Posterior coefficient densities ----------------########
+################################################################################
+
+# elk coefficient densities
+beta_df <- data.frame(
+  beta0_calfSurv = post_mat[, "beta0_calfSurv"],
+  beta1_calfSurv_wolfN = post_mat[, "beta1_calfSurv_wolfN"],
+  beta2_calfSurv_wintPPT = post_mat[, "beta2_calfSurv_wintPPT"],
+  beta0_yaSurv = post_mat[, "beta0_yaSurv"],
+  beta1_yaSurv_wolfN = post_mat[, "beta1_yaSurv_wolfN"],
+  beta2_yaSurv_wintPPT = post_mat[, "beta2_yaSurv_wintPPT"],
+  beta0_oaSurv = post_mat[, "beta0_oaSurv"],
+  beta1_oaSurv_wolfN = post_mat[, "beta1_oaSurv_wolfN"],
+  beta2_oaSurv_wintPPT = post_mat[, "beta2_oaSurv_wintPPT"]
+)
+
+beta_long <- beta_df %>%
+  pivot_longer(cols = everything(), names_to = "parameter", values_to = "value")
+
+beta_long$parameter <- factor(
+  beta_long$parameter,
+  levels = c(
+    "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_wintPPT",
+    "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT",
+    "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT"
+  ),
+  labels = c(
+    "Calf intercept", "Calf wolf effect", "Calf winterPPT effect",
+    "YA intercept", "YA wolf effect", "YA winterPPT effect",
+    "OA intercept", "OA wolf effect", "OA winterPPT effect"
+  )
+)
+
+coef_plot <- ggplot(beta_long, aes(x = value)) +
+  geom_density(fill = "#236192", alpha = 0.45) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  facet_wrap(~parameter, scales = "free", ncol = 3) +
+  theme_classic() +
+  labs(
+    x = "Posterior value",
+    y = "Density",
+    title = "Posterior distributions of elk regression coefficients"
+  )
+
+coef_plot
+
+# wolf coefficient densities
 wolf_beta_df <- data.frame(
   beta0_wpupSurv = post_mat[, "beta0_wpupSurv"],
   beta1_wpupSurv_elkN = post_mat[, "beta1_wpupSurv_elkN"],
+  beta2_wpupSurv_bisonN = post_mat[, "beta2_wpupSurv_bisonN"],
   beta0_wadSurv = post_mat[, "beta0_wadSurv"],
-  beta1_wadSurv_elkN = post_mat[, "beta1_wadSurv_elkN"]
+  beta1_wadSurv_elkN = post_mat[, "beta1_wadSurv_elkN"],
+  beta2_wadSurv_bisonN = post_mat[, "beta2_wadSurv_bisonN"]
 )
 
 wolf_beta_long <- wolf_beta_df %>%
@@ -1411,19 +1597,19 @@ wolf_beta_long <- wolf_beta_df %>%
 wolf_beta_long$parameter <- factor(
   wolf_beta_long$parameter,
   levels = c(
-    "beta0_wpupSurv", "beta1_wpupSurv_elkN",
-    "beta0_wadSurv", "beta1_wadSurv_elkN"
+    "beta0_wpupSurv", "beta1_wpupSurv_elkN", "beta2_wpupSurv_bisonN",
+    "beta0_wadSurv", "beta1_wadSurv_elkN", "beta2_wadSurv_bisonN"
   ),
   labels = c(
-    "Wolf pup intercept", "Wolf pup elk effect",
-    "Wolf adult intercept", "Wolf adult elk effect"
+    "Wolf pup intercept", "Wolf pup elk effect", "Wolf pup bison effect",
+    "Wolf adult intercept", "Wolf adult elk effect", "Wolf adult bison effect"
   )
 )
 
 wolf_coef_plot <- ggplot(wolf_beta_long, aes(x = value)) +
   geom_density(fill = "#6F263D", alpha = 0.45) +
   geom_vline(xintercept = 0, linetype = 2) +
-  facet_wrap(~parameter, scales = "free", ncol = 2) +
+  facet_wrap(~parameter, scales = "free", ncol = 3) +
   theme_classic() +
   labs(
     x = "Posterior value",
@@ -1433,27 +1619,33 @@ wolf_coef_plot <- ggplot(wolf_beta_long, aes(x = value)) +
 
 wolf_coef_plot
 
-# combine main wolf regression plot + coefficient densities
-wolf_final_plot <- plot_grid(
-  wolf_main_plot,
-  wolf_coef_plot,
+################################################################################
+#########------------------------ Combine plots -------------------------#######
+################################################################################
+
+elk_panel <- plot_grid(
+  wolf_plot_elk,
+  ppt_plot_elk,
+  coef_plot,
   ncol = 1,
-  rel_heights = c(2, 1.4),
-  labels = c("B", "D")
+  rel_heights = c(1.2, 1.2, 1),
+  labels = c("A", "B", "C")
 )
 
-wolf_final_plot
-
-
-################################################################################
-##########------- Combining wolf and elk regression results ----------##########
-################################################################################
+wolf_final_plot <- plot_grid(
+  wolf_main_plot,
+  bison_plot_wolf,
+  wolf_coef_plot,
+  ncol = 1,
+  rel_heights = c(1.2, 1.2, 1),
+  labels = c("D", "E", "F")
+)
 
 all_regression_plots <- plot_grid(
-  final_plot,
+  elk_panel,
   wolf_final_plot,
   ncol = 2,
-  rel_heights = c(1, 1)
+  rel_widths = c(1, 1)
 )
 
 all_regression_plots
