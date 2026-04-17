@@ -642,8 +642,8 @@ icm_params <- c(
 
 set.seed(17)
 nc <- 3
-ni <- 100
-nb <- 20
+ni <- 100000
+nb <- 20000
 th <- 4
 
 start_time <- Sys.time()
@@ -671,9 +671,9 @@ print(paste0('Model runtime: ',
 
 # SAVE OUTPUT
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
-save.image('data/outputs/ICM_environment_2026-04-09.RData')
+save.image('data/outputs/ICM_environment_2026-04-16.RData')
 
-load('data/outputs/ICM_environment_2026-04-09.RData')
+# load('data/outputs/ICM_environment_2026-04-16.RData')
 
 ################################################################################
 ############------- Reload packages if data loaded in --------##################
