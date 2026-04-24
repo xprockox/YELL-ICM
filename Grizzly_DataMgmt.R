@@ -47,4 +47,4 @@ griz_yearly
 ##################################################################################
 # data writing 
 stop("Warning: the following line with overwrite data. Are you sure you would like to proceed?")
-write.csv(griz_yearly, 'grizzly_abundances_cleaned.csv')
+write.csv(griz_yearly, 'data/covariates/grizzly_abundances_cleaned.csv')
