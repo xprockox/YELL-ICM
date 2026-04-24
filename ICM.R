@@ -653,8 +653,8 @@ icm_params <- c(
 
 set.seed(17)
 nc <- 3
-ni <- 10
-nb <- 2
+ni <- 200000
+nb <- 40000
 th <- 4
 
 start_time <- Sys.time()
@@ -681,7 +681,7 @@ print(paste0('Model runtime: ',
              units(run_time)))
 
 # SAVE OUTPUT
-stop('The following line will overwrite data. Are you sure you would like to proceed?')
+# stop('The following line will overwrite data. Are you sure you would like to proceed?')
 save.image('data/outputs/ICM_environment_2026-04-24.RData')
 
 # load('data/outputs/ICM_environment_2026-04-24.RData')
