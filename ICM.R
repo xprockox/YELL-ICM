@@ -682,9 +682,9 @@ print(paste0('Model runtime: ',
 
 # SAVE OUTPUT
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
-# save.image('data/outputs/ICM_environment_2026-04-24.RData')
+save.image('data/outputs/ICM_environment_2026-04-27.RData')
 
-load('data/outputs/ICM_environment_2026-04-24.RData')
+# load('data/outputs/ICM_environment_2026-04-27.RData')
 
 ################################################################################
 ############------- Reload packages if data loaded in --------##################
