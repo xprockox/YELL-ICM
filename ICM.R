@@ -25,7 +25,7 @@ library(popbio)
 #### # "NR"
 #### # or whether you would like to include interior wolves:
 #### # "full"
-wolf_range <- "NR"
+wolf_range <- "full"
 ###
 ##
 #
