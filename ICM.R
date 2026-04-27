@@ -317,7 +317,7 @@ icm_code <- nimbleCode({
   for (t in 1:(n_years-1)) {
     
     # expected adults in Dec of year t+1 are surviving adults from prev. year + pups
-    wolf_mu_a[t + 1] <- wolf_s_a[t] * wolf_N_a[t] + wolf_N_p[t]
+    wolf_mu_a[t + 1] <- wolf_s_a[t] * wolf_N_a[t] + wolf_N_p[t] + equals(t, 1) * 8 # 8 adults introduced in 1996
     wolf_N_a[t + 1] ~ dpois(max(1e-6, wolf_mu_a[t + 1]))
     
     # pups counted in Dec of year t produce pups in summer of t+1
@@ -341,7 +341,8 @@ icm_code <- nimbleCode({
   
   # pup survival 
   for (t in 2:n_years) {
-    wolf_N_p[t] ~ dbin(wolf_s_p[t - 1], wolf_N_p_sum[t])
+    wolf_N_p_bio[t] ~ dbin(wolf_s_p[t - 1], wolf_N_p_sum[t]) # pups from the biological process (reproduction + survival)
+    wolf_N_p[t] <- wolf_N_p_bio[t] + equals(t, 2) * 9 # add 9 pups to the year 1996 for the introduced pups
   }
   
   # wolf CJS
