@@ -217,9 +217,9 @@ icm_code <- nimbleCode({
   elk_tau_obs_female <- 1 / (elk_sigma_obs_female^2)
   
   # elk initial values
-  elk_N_1y[1] ~ dpois(2500) # mean values from rough estimations
-  elk_N_ya[1] ~ dpois(10000) # using total abundance and classification (cow:calf) data
-  elk_N_oa[1] ~ dpois(1000) # and hunter harvest (age) data for prop young vs. old adults
+  elk_N_1y[1] ~ dunif(0, 5000) 
+  elk_N_ya[1] ~ dunif(0, 15000)
+  elk_N_oa[1] ~ dunif(0, 5000) 
   
   elk_N_female[1] <- elk_N_1y[1] + elk_N_ya[1] + elk_N_oa[1]
   elk_obs_female[1] ~ dlnorm(log(elk_N_female[1] + 1e-6), elk_tau_obs_female)
@@ -682,9 +682,9 @@ print(paste0('Model runtime: ',
 
 # SAVE OUTPUT
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
-save.image('data/outputs/ICM_environment_2026-04-24.RData')
+# save.image('data/outputs/ICM_environment_2026-04-24.RData')
 
-# load('data/outputs/ICM_environment_2026-04-24.RData')
+load('data/outputs/ICM_environment_2026-04-24.RData')
 
 ################################################################################
 ############------- Reload packages if data loaded in --------##################
