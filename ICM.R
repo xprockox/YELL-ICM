@@ -306,29 +306,42 @@ icm_code <- nimbleCode({
   wolf_sigma_obs ~ dunif(0.05, 2)
   wolf_tau_obs <- 1 / (wolf_sigma_obs^2)
   
-  wolf_N_a[1] ~ dpois(14) # 14 wolves originally introduced the first year
+  # because this is a reintroduced population, the initial values are known.
+  wolf_N_a[1] <- 8 # 14 wolves originally introduced the first year:
+  wolf_N_p[1] <- 6 # 8 adults, 6 pups
+  wolf_N_p_sum[1] <- 0 
+  # there were no summer pups the first year because wolves were introduced in Jan 1995, 
+  # and then the pups counted in summer 1995 would belong to the next year's cohort
   
-  for (t in 1:n_years) {
+  # wolf abundances and observation errors
+  for (t in 1:(n_years-1)) {
     
-    # expected summer pups
-    wolf_N_p_sum[t] ~ dpois(max(1e-6, wolf_f[t] * wolf_N_a[t]))
+    # expected adults in Dec of year t+1 are surviving adults from prev. year + pups
+    wolf_mu_a[t + 1] <- wolf_s_a[t] * wolf_N_a[t] + wolf_N_p[t]
+    wolf_N_a[t + 1] ~ dpois(max(1e-6, wolf_mu_a[t + 1]))
     
-    # observed summer pup counts
+    # pups counted in Dec of year t produce pups in summer of t+1
+    wolf_N_p_sum[t + 1] ~ dpois(max(1e-6, wolf_f[t] * wolf_N_a[t]))
+  }
+  
+  # observation processes 
+  for (t in 1:n_years){
+    
+    # total wolves in Dec of year t+1
+    wolf_N_tot[t] <- wolf_N_a[t] + wolf_N_p[t]
+    
+    # observed summer pups in year t+1
     wolf_obs_p_sum[t] ~ dpois(max(1e-6, wolf_N_p_sum[t]))
     
-    # summer pups surviving to December
-    wolf_N_p[t] ~ dbin(wolf_s_p[t], wolf_N_p_sum[t])
-    
-    # December totals
-    wolf_N_tot[t] <- wolf_N_p[t] + wolf_N_a[t]
+    # december count observations
     wolf_obs_tot[t] ~ dlnorm(log(wolf_N_tot[t] + 1e-6), wolf_tau_obs)
     wolf_obs_p[t] ~ dlnorm(log(wolf_N_p[t] + 1e-6), wolf_tau_obs)
     wolf_obs_a[t] ~ dlnorm(log(wolf_N_a[t] + 1e-6), wolf_tau_obs)
   }
   
-  for (t in 1:(n_years - 1)) {
-    wolf_mu_a[t + 1] <- wolf_N_p[t] + wolf_s_a[t] * wolf_N_a[t]
-    wolf_N_a[t + 1] ~ dpois(max(1e-6, wolf_mu_a[t + 1]))
+  # pup survival 
+  for (t in 2:n_years) {
+    wolf_N_p[t] ~ dbin(wolf_s_p[t - 1], wolf_N_p_sum[t])
   }
   
   # wolf CJS
