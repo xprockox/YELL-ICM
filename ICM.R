@@ -580,6 +580,19 @@ make_icm_inits <- function() {
     pmax(1, round(wolf_pop$summer_pups * 0.5))
   )
   
+  wolf_init_Np_bio <- rep(0, n_years)
+  
+  if (n_years >= 2) {
+    wolf_init_Np_bio[2] <- max(0, wolf_init_Np[2] - 9)
+  }
+  
+  if (n_years >= 3) {
+    wolf_init_Np_bio[3:n_years] <- wolf_init_Np[3:n_years]
+  }
+  
+  wolf_init_Np_bio <- pmin(wolf_init_Np_bio, pmax(0, round(wolf_pop$summer_pups)))
+  wolf_init_Np_bio[1] <- 0
+  
   wolf_init_Na <- pmax(1, round(wolf_init_Ntot - wolf_init_Np))
   
   wolf_z_init <- matrix(NA, nrow = nrow(wolf_y), ncol = ncol(wolf_y))
@@ -623,6 +636,7 @@ make_icm_inits <- function() {
     wolf_sigma_obs = 0.2,
     wolf_N_p_sum = pmax(1, round(wolf_pop$summer_pups)),
     wolf_N_p = wolf_init_Np,
+    wolf_N_p_bio = wolf_init_Np_bio,
     wolf_N_a = wolf_init_Na,
     wolf_p_det = runif(n_years, 0.6, 0.95),
     wolf_z = wolf_z_init
