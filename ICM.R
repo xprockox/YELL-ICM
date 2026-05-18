@@ -710,9 +710,9 @@ print(paste0('Model runtime: ',
 
 # SAVE OUTPUT
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
-save.image('data/outputs/ICM_environment_2026-04-27.RData')
+# save.image('data/outputs/ICM_environment_2026-04-27.RData')
 
-# load('data/outputs/ICM_environment_2026-04-27.RData')
+load('data/outputs/ICM_environment_2026-04-27.RData')
 
 ################################################################################
 ############------- Reload packages if data loaded in --------##################
@@ -1265,7 +1265,7 @@ wolf_plot_elk <- ggplot(plot_df_elk, aes(x = wolf_N_tot, y = elk_surv)) +
   ) +
   geom_errorbar(aes(ymin = elk_low, ymax = elk_high), width = 0) +
   geom_errorbarh(aes(xmin = wolf_low, xmax = wolf_high), height = 0) +
-  geom_point(shape = 21, fill = "gold", color = "black", size = 2.5) +
+  geom_point(shape = 21, fill = "gold", color = "black", size = 2) +
   facet_wrap(~stage, scales = "free_y") +
   theme_classic() +
   labs(
@@ -1364,7 +1364,7 @@ ppt_plot_elk <- ggplot(plot_df_elk, aes(x = winter_ppt_mm, y = elk_surv)) +
     linewidth = 1
   ) +
   geom_errorbar(aes(ymin = elk_low, ymax = elk_high), width = 0) +
-  geom_point(shape = 21, fill = "gold", color = "black", size = 2.5) +
+  geom_point(shape = 21, fill = "gold", color = "black", size = 2) +
   facet_wrap(~stage, scales = "free_y") +
   theme_classic() +
   labs(
@@ -1460,7 +1460,7 @@ griz_plot_elk <- ggplot(plot_df_elk, aes(x = griz_N, y = elk_surv)) +
     linewidth = 1
   ) +
   geom_errorbar(aes(ymin = elk_low, ymax = elk_high), width = 0) +
-  geom_point(shape = 21, fill = "gold", color = "black", size = 2.5) +
+  geom_point(shape = 21, fill = "gold", color = "black", size = 2) +
   facet_wrap(~stage, scales = "free_y") +
   theme_classic() +
   labs(
@@ -1681,6 +1681,25 @@ bison_plot_wolf
 ################################################################################
 ########--------------- Posterior coefficient densities ----------------########
 ################################################################################
+################################################################################
+#
+##
+###
+####
+#####
+######
+# specify coefficients of interest for elk density plots
+coefs <- c("Calf intercept", "Calf grizzly effect",
+           "OA intercept", "OA grizzly effect",
+           "YA intercept", "YA grizzly effect")
+######
+#####
+####
+###
+##
+#
+
+################################################################################
 
 # elk coefficient densities
 beta_df <- data.frame(
@@ -1715,10 +1734,10 @@ beta_long$parameter <- factor(
   )
 )
 
-coef_plot <- ggplot(beta_long, aes(x = value)) +
+coef_plot <- ggplot(beta_long[beta_long$parameter %in% coefs,], aes(x = value)) +
   geom_density(fill = "#236192", alpha = 0.45) +
   geom_vline(xintercept = 0, linetype = 2) +
-  facet_wrap(~parameter, scales = "free", ncol = 4) +
+  facet_wrap(~parameter, scales = "free", ncol = 6) +
   theme_classic() +
   labs(
     x = "Posterior value",
@@ -1727,6 +1746,26 @@ coef_plot <- ggplot(beta_long, aes(x = value)) +
   )
 
 coef_plot
+
+################################################################################
+
+#
+##
+###
+####
+#####
+######
+# specify coefficients of interest for elk density plots
+coefs_wolf <- c("Wolf pup intercept", "Wolf pup bison effect",
+                "Wolf adult intercept", "Wolf adult bison effect")
+######
+#####
+####
+###
+##
+#
+
+################################################################################
 
 # wolf coefficient densities
 wolf_beta_df <- data.frame(
@@ -1753,10 +1792,10 @@ wolf_beta_long$parameter <- factor(
   )
 )
 
-wolf_coef_plot <- ggplot(wolf_beta_long, aes(x = value)) +
+wolf_coef_plot <- ggplot(wolf_beta_long[wolf_beta_long$parameter %in% coefs_wolf,], aes(x = value)) +
   geom_density(fill = "#6F263D", alpha = 0.45) +
   geom_vline(xintercept = 0, linetype = 2) +
-  facet_wrap(~parameter, scales = "free", ncol = 3) +
+  facet_wrap(~parameter, scales = "free", ncol = 4) +
   theme_classic() +
   labs(
     x = "Posterior value",
