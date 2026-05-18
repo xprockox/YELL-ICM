@@ -422,8 +422,17 @@ icm_code <- nimbleCode({
   sigma_wad ~ dunif(0, 0.3)
   tau_wad <- 1 / (sigma_wad^2)
   
+  # Initial year vital rates must be explicitly defined because
+  # lagged predictors (t - 1) are used in the regression models.
+  logit(elk_s_c[1]) ~ dnorm(qlogis(0.22), 1 / 0.5^2)
+  logit(elk_s_ya[1]) ~ dnorm(qlogis(0.90), 1 / 0.5^2)
+  logit(elk_s_oa[1]) ~ dnorm(qlogis(0.80), 1 / 0.5^2)
+  
+  logit(wolf_s_p[1]) ~ dnorm(qlogis(0.50), 1 / 0.5^2)
+  logit(wolf_s_a[1]) ~ dnorm(qlogis(0.90), 1 / 0.5^2)
+  
   # Year-specific regressions
-  for (t in 1:n_years) {
+  for (t in 2:n_years) {
     
     # elk random year effects
     eps_elk_s_c[t] ~ dnorm(0, tau_calf)
@@ -443,41 +452,41 @@ icm_code <- nimbleCode({
     # elk regression models
     logit(elk_s_c[t])  <- 
       beta0_calfSurv + 
-      beta1_calfSurv_wolfN * wolf_N_tot_std[t] + 
+      beta1_calfSurv_wolfN * wolf_N_tot_std[t - 1] + 
       beta2_calfSurv_wintPPT * wintPPT[t] + 
-      beta3_calfSurv_grizN * grizN_std[t] +
-      beta4_calfSurv_elkN * elk_N_female_std[t] +
+      beta3_calfSurv_grizN * grizN_std[t - 1] +
+      beta4_calfSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_c[t]
     
     logit(elk_s_ya[t]) <- 
       beta0_yaSurv + 
-      beta1_yaSurv_wolfN * wolf_N_tot_std[t] + 
+      beta1_yaSurv_wolfN * wolf_N_tot_std[t - 1] + 
       beta2_yaSurv_wintPPT * wintPPT[t] + 
-      beta3_yaSurv_grizN * grizN_std[t] +
-      beta4_yaSurv_elkN * elk_N_female_std[t] +
+      beta3_yaSurv_grizN * grizN_std[t - 1] +
+      beta4_yaSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_ya[t]
     
     logit(elk_s_oa[t]) <- 
       beta0_oaSurv + 
-      beta1_oaSurv_wolfN * wolf_N_tot_std[t] + 
+      beta1_oaSurv_wolfN * wolf_N_tot_std[t - 1] + 
       beta2_oaSurv_wintPPT * wintPPT[t] + 
-      beta3_oaSurv_grizN * grizN_std[t] +
-      beta4_oaSurv_elkN * elk_N_female_std[t] +
+      beta3_oaSurv_grizN * grizN_std[t - 1] +
+      beta4_oaSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_oa[t]
     
     # wolf regression models
     logit(wolf_s_p[t])  <- 
       beta0_wpupSurv + 
-      beta1_wpupSurv_elkN * elk_N_female_std[t] + 
-      beta2_wpupSurv_bisonN * bisonN_std[t] +
-      beta3_wpupSurv_wolfN * wolf_N_tot_std[t] +
+      beta1_wpupSurv_elkN * elk_N_female_std[t - 1] + 
+      beta2_wpupSurv_bisonN * bisonN_std[t - 1] +
+      beta3_wpupSurv_wolfN * wolf_N_tot_std[t - 1] +
       eps_wolf_s_p[t]
     
     logit(wolf_s_a[t]) <- 
       beta0_wadSurv + 
-      beta1_wadSurv_elkN * elk_N_female_std[t] + 
-      beta2_wadSurv_bisonN * bisonN_std[t] +
-      beta3_wadSurv_wolfN * wolf_N_tot_std[t] +
+      beta1_wadSurv_elkN * elk_N_female_std[t - 1] + 
+      beta2_wadSurv_bisonN * bisonN_std[t - 1] +
+      beta3_wadSurv_wolfN * wolf_N_tot_std[t - 1] +
       eps_wolf_s_a[t]
   }
 })
