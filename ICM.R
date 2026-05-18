@@ -380,16 +380,19 @@ icm_code <- nimbleCode({
   beta1_calfSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_calfSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
   beta3_calfSurv_grizN ~ dnorm(0, 1 / 0.3^2)
+  beta4_calfSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   
   beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2) # mean = 0.90
   beta1_yaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_yaSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
   beta3_yaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
+  beta4_yaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   
   beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2) # mean = 0.80
   beta1_oaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_oaSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
   beta3_oaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
+  beta4_oaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   
   # Priors for elk random year-effect SDs
   sigma_calf ~ dunif(0, 0.5)
@@ -405,10 +408,12 @@ icm_code <- nimbleCode({
   beta0_wpupSurv ~ dnorm(qlogis(0.5), 1 / 0.3^2) # mean = 0.22
   beta1_wpupSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   beta2_wpupSurv_bisonN ~ dnorm(0, 1 / 0.3^2)
+  beta3_wpupSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   
   beta0_wadSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2) # mean = 0.90
   beta1_wadSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   beta2_wadSurv_bisonN ~ dnorm(0, 1 / 0.3^2)
+  beta3_wadSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   
   # Priors for wolf random year-effect SDs
   sigma_wpup ~ dunif(0, 0.5)
@@ -441,6 +446,7 @@ icm_code <- nimbleCode({
       beta1_calfSurv_wolfN * wolf_N_tot_std[t] + 
       beta2_calfSurv_wintPPT * wintPPT[t] + 
       beta3_calfSurv_grizN * grizN_std[t] +
+      beta4_calfSurv_elkN * elk_N_female_std[t] +
       eps_elk_s_c[t]
     
     logit(elk_s_ya[t]) <- 
@@ -448,6 +454,7 @@ icm_code <- nimbleCode({
       beta1_yaSurv_wolfN * wolf_N_tot_std[t] + 
       beta2_yaSurv_wintPPT * wintPPT[t] + 
       beta3_yaSurv_grizN * grizN_std[t] +
+      beta4_yaSurv_elkN * elk_N_female_std[t] +
       eps_elk_s_ya[t]
     
     logit(elk_s_oa[t]) <- 
@@ -455,6 +462,7 @@ icm_code <- nimbleCode({
       beta1_oaSurv_wolfN * wolf_N_tot_std[t] + 
       beta2_oaSurv_wintPPT * wintPPT[t] + 
       beta3_oaSurv_grizN * grizN_std[t] +
+      beta4_oaSurv_elkN * elk_N_female_std[t] +
       eps_elk_s_oa[t]
     
     # wolf regression models
@@ -462,12 +470,14 @@ icm_code <- nimbleCode({
       beta0_wpupSurv + 
       beta1_wpupSurv_elkN * elk_N_female_std[t] + 
       beta2_wpupSurv_bisonN * bisonN_std[t] +
+      beta3_wpupSurv_wolfN * wolf_N_tot_std[t] +
       eps_wolf_s_p[t]
     
     logit(wolf_s_a[t]) <- 
       beta0_wadSurv + 
       beta1_wadSurv_elkN * elk_N_female_std[t] + 
       beta2_wadSurv_bisonN * bisonN_std[t] +
+      beta3_wadSurv_wolfN * wolf_N_tot_std[t] +
       eps_wolf_s_a[t]
   }
 })
@@ -660,16 +670,16 @@ icm_params <- c(
   "wolf_N_p_sum", "wolf_N_p", "wolf_N_a", "wolf_N_tot",
   
   # elk regression coefficients
-  'beta0_calfSurv', 'beta1_calfSurv_wolfN', 'beta2_calfSurv_wintPPT', 'beta3_calfSurv_grizN',
-  'beta0_yaSurv', 'beta1_yaSurv_wolfN', 'beta2_yaSurv_wintPPT', 'beta3_yaSurv_grizN',
-  'beta0_oaSurv', 'beta1_oaSurv_wolfN', 'beta2_oaSurv_wintPPT', 'beta3_oaSurv_grizN',
+  'beta0_calfSurv', 'beta1_calfSurv_wolfN', 'beta2_calfSurv_wintPPT', 'beta3_calfSurv_grizN', 'beta4_calfSurv_elkN',
+  'beta0_yaSurv', 'beta1_yaSurv_wolfN', 'beta2_yaSurv_wintPPT', 'beta3_yaSurv_grizN', 'beta4_yaSurv_elkN',
+  'beta0_oaSurv', 'beta1_oaSurv_wolfN', 'beta2_oaSurv_wintPPT', 'beta3_oaSurv_grizN', 'beta4_oaSurv_elkN',
   
   "sigma_calf", "sigma_ya", "sigma_oa",
   "eps_elk_s_c", "eps_elk_s_ya", "eps_elk_s_oa",
   
   # wolf regression coefficients
-  'beta0_wpupSurv', 'beta1_wpupSurv_elkN', 'beta2_wpupSurv_bisonN',
-  'beta0_wadSurv', 'beta1_wadSurv_elkN', 'beta2_wadSurv_bisonN',
+  'beta0_wpupSurv', 'beta1_wpupSurv_elkN', 'beta2_wpupSurv_bisonN', 'beta3_wpupSurv_wolfN',
+  'beta0_wadSurv', 'beta1_wadSurv_elkN', 'beta2_wadSurv_bisonN', 'beta3_wadSurv_wolfN',
   
   "sigma_wpup", "sigma_wad",
   "eps_wolf_s_p", "eps_wolf_s_a"
