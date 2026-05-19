@@ -53,6 +53,8 @@ elk_dat_fec <- read.csv("data/elk_fecundity.csv")
 
 elk_dat_n$n_female <- elk_dat_n$n_cow + (elk_dat_n$n_calf / 2)
 
+elk_shared_years <- intersect(as.numeric(elk_dat_n$year), as.numeric(colnames(elk_z)))
+
 ################################################################################
 ############------------------ Load wolf data -----------------#################
 ################################################################################
@@ -101,8 +103,6 @@ wolf_N_indiv <- nrow(wolf_y)
 ################################################################################
 ########---------- Align elk and wolf data to same years ---------##############
 ################################################################################
-
-elk_shared_years <- intersect(as.numeric(elk_dat_n$year), as.numeric(colnames(elk_z)))
 
 # choose years shared by BOTH elk and wolf submodels
 community_years <- intersect(elk_shared_years, wolf_shared_years)
@@ -245,14 +245,12 @@ elk_m_oa <- make_class_marray(
   class_name = "old_adult"
 )
 
-# inspect results
-elk_m_ya$m_array
-elk_m_ya$releases
-elk_m_ya$n_individuals
+# then write parts of the M-array dfs to specific objects
+elk_marray_ya <- elk_m_ya$m_array
+elk_rel_ya <- elk_m_ya$releases
 
-elk_m_oa$m_array
-elk_m_oa$releases
-elk_m_oa$n_individuals
+elk_marray_oa <- elk_m_oa$m_array
+elk_rel_oa <- elk_m_oa$releases
 
 ################################################################################
 ##########------------ Build class-specific wolf M-arrays -----------###########
@@ -277,24 +275,6 @@ wolf_marray_p <- wolf_m_p$m_array
 wolf_rel_p <- wolf_m_p$releases
 wolf_marray_a <- wolf_m_a$m_array
 wolf_rel_a <- wolf_m_a$releases
-
-################################################################################
-##########---------------- Save outputs if desired ----------------#############
-################################################################################
-
-elk_marray_objects <- list(
-  young_adult = elk_m_ya,
-  old_adult = elk_m_oa
-)
-
-# then write parts of the M-array dfs to specific objects
-elk_marray_ya <- elk_m_ya$m_array
-elk_rel_ya <- elk_m_ya$releases
-
-elk_marray_oa <- elk_m_oa$m_array
-elk_rel_oa <- elk_m_oa$releases
-
-# save(elk_marray_objects, file = "data/elk_marray_objects.rData")
 
 ################################################################################
 ############-------------- Load in covariates -------------#####################
@@ -386,7 +366,6 @@ icm_code <- nimbleCode({
   for (r in 1:(n_years - 1)) {
     
     for (j in 1:(n_years - 1)) {
-      
       elk_marr_prob_ya[r, j] <-
         equals(j, r) * elk_s_ya[r] * elk_p_det[r + 1] +
         step(j - r - 0.5) *
@@ -396,7 +375,6 @@ icm_code <- nimbleCode({
     }
     
     elk_marr_prob_ya[r, n_years] <- 1 - sum(elk_marr_prob_ya[r, 1:(n_years - 1)])
-    
     elk_marray_ya[r, 1:n_years] ~ dmulti(elk_marr_prob_ya[r, 1:n_years], elk_rel_ya[r])
   }
   
@@ -404,7 +382,6 @@ icm_code <- nimbleCode({
   for (r in 1:(n_years - 1)) {
     
     for (j in 1:(n_years - 1)) {
-      
       elk_marr_prob_oa[r, j] <-
         equals(j, r) * elk_s_oa[r] * elk_p_det[r + 1] +
         step(j - r - 0.5) *
@@ -414,7 +391,6 @@ icm_code <- nimbleCode({
     }
     
     elk_marr_prob_oa[r, n_years] <- 1 - sum(elk_marr_prob_oa[r, 1:(n_years - 1)])
-    
     elk_marray_oa[r, 1:n_years] ~ dmulti(elk_marr_prob_oa[r, 1:n_years], elk_rel_oa[r])
   }
   
@@ -500,7 +476,6 @@ icm_code <- nimbleCode({
   for (r in 1:(n_years - 1)) {
     
     for (j in 1:(n_years - 1)) {
-      
       wolf_marr_prob_p[r, j] <-
         equals(j, r) * wolf_s_p[r] * wolf_p_det[r + 1] +
         step(j - r - 0.5) *
@@ -511,7 +486,6 @@ icm_code <- nimbleCode({
     }
     
     wolf_marr_prob_p[r, n_years] <- 1 - sum(wolf_marr_prob_p[r, 1:(n_years - 1)])
-    
     wolf_marray_p[r, 1:n_years] ~ dmulti(wolf_marr_prob_p[r, 1:n_years], wolf_rel_p[r])
   }
   
@@ -519,7 +493,6 @@ icm_code <- nimbleCode({
   for (r in 1:(n_years - 1)) {
     
     for (j in 1:(n_years - 1)) {
-      
       wolf_marr_prob_a[r, j] <-
         equals(j, r) * wolf_s_a[r] * wolf_p_det[r + 1] +
         step(j - r - 0.5) *
@@ -529,7 +502,6 @@ icm_code <- nimbleCode({
     }
     
     wolf_marr_prob_a[r, n_years] <- 1 - sum(wolf_marr_prob_a[r, 1:(n_years - 1)])
-    
     wolf_marray_a[r, 1:n_years] ~ dmulti(wolf_marr_prob_a[r, 1:n_years], wolf_rel_a[r])
   }
   
@@ -899,7 +871,7 @@ print(paste0('Model runtime: ',
 
 # SAVE OUTPUT
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
-save.image('data/outputs/ICM_environment_2026-05-18.RData')
+save.image('data/outputs/ICM_environment_2026-05-19.RData')
 
 # load('data/outputs/ICM_environment_2026-04-27.RData')
 
