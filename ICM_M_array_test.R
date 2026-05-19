@@ -17,6 +17,7 @@ library(coda)
 library(stringr)
 library(cowplot)
 library(popbio)
+library(parallel)
 
 #
 ##
@@ -837,7 +838,7 @@ icm_params <- c(
 )
 
 ################################################################################
-###########------------------- Run model ----------------------#################
+###########---------------- Parallel MCMC run -----------------#################
 ################################################################################
 
 set.seed(17)
@@ -846,32 +847,110 @@ ni <- 200000
 nb <- 40000
 th <- 4
 
+run_one_chain <- function(chain_id,
+                          icm_code,
+                          icm_data,
+                          icm_constants,
+                          icm_params,
+                          make_icm_inits,
+                          ni,
+                          nb,
+                          th) {
+  
+  library(nimble)
+  library(coda)
+  
+  set.seed(1000 + chain_id)
+  
+  Rmodel <- nimbleModel(
+    code = icm_code,
+    data = icm_data,
+    constants = icm_constants,
+    inits = make_icm_inits()
+  )
+  
+  Cmodel <- compileNimble(Rmodel)
+  
+  conf <- configureMCMC(Rmodel, monitors = icm_params)
+  Rmcmc <- buildMCMC(conf)
+  Cmcmc <- compileNimble(Rmcmc, project = Rmodel)
+  
+  samples <- runMCMC(
+    Cmcmc,
+    niter = ni,
+    nburnin = nb,
+    thin = th,
+    setSeed = FALSE,
+    samplesAsCodaMCMC = TRUE,
+    summary = FALSE
+  )
+  
+  return(samples)
+}
+
 start_time <- Sys.time()
 
-icm_mod <- nimbleMCMC(
-  code = icm_code,
-  data = icm_data,
-  constants = icm_constants,
-  inits = make_icm_inits,
-  monitors = icm_params,
-  nchains = nc,
-  niter = ni,
-  nburnin = nb,
-  thin = th,
-  summary = TRUE
+n_cores <- min(nc, detectCores() - 1)
+cl <- makeCluster(n_cores)
+
+clusterExport(
+  cl,
+  varlist = c(
+    "icm_code",
+    "icm_data",
+    "icm_constants",
+    "icm_params",
+    "make_icm_inits",
+    "ni",
+    "nb",
+    "th",
+    "run_one_chain"
+  ),
+  envir = environment()
 )
+
+clusterEvalQ(cl, {
+  library(nimble)
+  library(coda)
+})
+
+chain_samples <- parLapply(
+  cl,
+  X = 1:nc,
+  fun = function(chain_id) {
+    run_one_chain(
+      chain_id = chain_id,
+      icm_code = icm_code,
+      icm_data = icm_data,
+      icm_constants = icm_constants,
+      icm_params = icm_params,
+      make_icm_inits = make_icm_inits,
+      ni = ni,
+      nb = nb,
+      th = th
+    )
+  }
+)
+
+on.exit(stopCluster(cl), add = TRUE)
+
+icm_mod <- mcmc.list(chain_samples)
 
 end_time <- Sys.time()
 run_time <- end_time - start_time
 
-print(paste0('Model runtime: ', 
-             round(run_time, 2), 
-             ' ', 
-             units(run_time)))
+print(paste0(
+  "Model runtime: ",
+  round(as.numeric(run_time, units = "mins"), 2),
+  " mins"
+))
+
+summary(icm_mod)
+gelman.diag(icm_mod)
 
 # SAVE OUTPUT
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
-save.image('data/outputs/ICM_environment_2026-05-19.RData')
+save.image("data/outputs/ICM_environment_2026-05-19.RData")
 
 # load('data/outputs/ICM_environment_2026-04-27.RData')
 
