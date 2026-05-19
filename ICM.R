@@ -431,6 +431,12 @@ icm_code <- nimbleCode({
   logit(wolf_s_p[1]) ~ dnorm(qlogis(0.50), 1 / 0.5^2)
   logit(wolf_s_a[1]) ~ dnorm(qlogis(0.90), 1 / 0.5^2)
   
+  # standardize abundance data for use in regressions
+  for (t in 1:n_years) {
+    wolf_N_tot_std[t] <- (wolf_N_tot[t] - wolf_tot_mean) / wolf_tot_sd
+    elk_N_female_std[t] <- (elk_N_female[t] - elk_N_female_mean) / elk_N_female_sd
+  }
+  
   # Year-specific regressions
   for (t in 2:n_years) {
     
@@ -442,12 +448,6 @@ icm_code <- nimbleCode({
     # wolf random year effects
     eps_wolf_s_p[t] ~ dnorm(0, tau_wpup)
     eps_wolf_s_a[t] ~ dnorm(0, tau_wad)
-    
-    # standardize wolf abundance
-    wolf_N_tot_std[t] <- (wolf_N_tot[t] - wolf_tot_mean) / wolf_tot_sd
-    
-    # standardize elk abundance
-    elk_N_female_std[t] <- (elk_N_female[t] - elk_N_female_mean) / elk_N_female_sd
     
     # elk regression models
     logit(elk_s_c[t])  <- 
@@ -635,9 +635,6 @@ make_icm_inits <- function() {
   
   list(
     # elk
-    # elk_s_c = rep(0.22, n_years), # these get removed when the regressions are there
-    # elk_s_ya = rep(0.90, n_years), # because they are now deterministic
-    # elk_s_oa = rep(0.80, n_years),
     elk_p_13 = rep(0.15, n_years),
     elk_f_ya = rep(0.76, n_years - 1),
     elk_f_oa = rep(0.64, n_years - 1),
@@ -649,8 +646,6 @@ make_icm_inits <- function() {
     elk_z = elk_z_init,
     
     # wolf
-    # wolf_s_p = rep(0.5, n_years),
-    # wolf_s_a = rep(0.9, n_years),
     wolf_f = rep(1.0, n_years),
     wolf_sigma_obs = 0.2,
     wolf_N_p_sum = pmax(1, round(wolf_pop$summer_pups)),
@@ -658,7 +653,58 @@ make_icm_inits <- function() {
     wolf_N_p_bio = wolf_init_Np_bio,
     wolf_N_a = wolf_init_Na,
     wolf_p_det = runif(n_years, 0.6, 0.95),
-    wolf_z = wolf_z_init
+    wolf_z = wolf_z_init,
+    
+    # elk regression coefficients
+    beta0_calfSurv = qlogis(0.22),
+    beta1_calfSurv_wolfN = 0,
+    beta2_calfSurv_wintPPT = 0,
+    beta3_calfSurv_grizN = 0,
+    beta4_calfSurv_elkN = 0,
+    
+    beta0_yaSurv = qlogis(0.90),
+    beta1_yaSurv_wolfN = 0,
+    beta2_yaSurv_wintPPT = 0,
+    beta3_yaSurv_grizN = 0,
+    beta4_yaSurv_elkN = 0,
+    
+    beta0_oaSurv = qlogis(0.80),
+    beta1_oaSurv_wolfN = 0,
+    beta2_oaSurv_wintPPT = 0,
+    beta3_oaSurv_grizN = 0,
+    beta4_oaSurv_elkN = 0,
+    
+    sigma_calf = 0.1,
+    sigma_ya = 0.1,
+    sigma_oa = 0.1,
+    
+    eps_elk_s_c = c(0, rep(0, n_years - 1)),
+    eps_elk_s_ya = c(0, rep(0, n_years - 1)),
+    eps_elk_s_oa = c(0, rep(0, n_years - 1)),
+    
+    # wolf regression coefficients
+    beta0_wpupSurv = qlogis(0.50),
+    beta1_wpupSurv_elkN = 0,
+    beta2_wpupSurv_bisonN = 0,
+    beta3_wpupSurv_wolfN = 0,
+    
+    beta0_wadSurv = qlogis(0.90),
+    beta1_wadSurv_elkN = 0,
+    beta2_wadSurv_bisonN = 0,
+    beta3_wadSurv_wolfN = 0,
+    
+    sigma_wpup = 0.1,
+    sigma_wad = 0.1,
+    
+    eps_wolf_s_p = c(0, rep(0, n_years - 1)),
+    eps_wolf_s_a = c(0, rep(0, n_years - 1)),
+    
+    # first-year survival values
+    logit_wolf_s_p = c(qlogis(0.5), rep(NA, n_years - 1)),
+    logit_wolf_s_a = c(qlogis(0.9), rep(NA, n_years - 1)),
+    logit_elk_s_c = c(qlogis(0.22), rep(NA, n_years - 1)),
+    logit_elk_s_ya = c(qlogis(0.90), rep(NA, n_years - 1)),
+    logit_elk_s_oa = c(qlogis(0.80), rep(NA, n_years - 1))
   )
 }
 
@@ -729,9 +775,9 @@ print(paste0('Model runtime: ',
 
 # SAVE OUTPUT
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
-# save.image('data/outputs/ICM_environment_2026-04-27.RData')
+save.image('data/outputs/ICM_environment_2026-05-18.RData')
 
-load('data/outputs/ICM_environment_2026-04-27.RData')
+# load('data/outputs/ICM_environment_2026-04-27.RData')
 
 ################################################################################
 ############------- Reload packages if data loaded in --------##################
