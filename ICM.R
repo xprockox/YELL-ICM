@@ -812,6 +812,11 @@ save(
   icm_samples,
   icm_samples_clean,
   icm_summary,
+  community_years,
+  elk_dat_n,
+  wolf_pop,
+  covars,
+  icm_constants,
   file = "data/outputs/ICM_parallel_output_2026-05-20.RData"
 )
 ################################################################################
