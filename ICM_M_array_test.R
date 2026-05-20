@@ -152,9 +152,6 @@ wolf_pop <- switch(
   stop("wolf_range must be 'NR' or 'full'")
 )
 
-wolf_pop <- wolf_pop %>%
-  filter(!seasonal.year %in% drop_regression_years)
-
 wolf_shared_years <- intersect(wolf_pop$seasonal.year, as.numeric(colnames(wolf_z)))
 wolf_pop <- wolf_pop %>%
   filter(seasonal.year %in% wolf_shared_years)
@@ -164,6 +161,13 @@ wolf_pop <- wolf_pop %>%
 ################################################################################
 
 community_years <- intersect(elk_shared_years, wolf_shared_years)
+
+regression_start_year <- max(drop_regression_years) + 1
+regression_start_idx <- match(regression_start_year, community_years)
+
+if (is.na(regression_start_idx)) {
+  stop("regression_start_year was not found in community_years.")
+}
 
 elk_dat_n <- elk_dat_n %>%
   filter(year %in% community_years) %>%
@@ -443,18 +447,20 @@ icm_code <- nimbleCode({
   tau_wpup <- 1 / (sigma_wpup^2)
   tau_wad <- 1 / (sigma_wad^2)
   
-  logit(elk_s_c[1]) ~ dnorm(qlogis(0.22), 1 / 0.5^2)
-  logit(elk_s_ya[1]) ~ dnorm(qlogis(0.90), 1 / 0.5^2)
-  logit(elk_s_oa[1]) ~ dnorm(qlogis(0.80), 1 / 0.5^2)
-  logit(wolf_s_p[1]) ~ dnorm(qlogis(0.50), 1 / 0.5^2)
-  logit(wolf_s_a[1]) ~ dnorm(qlogis(0.90), 1 / 0.5^2)
-  
-  # initial values
-  eps_elk_s_c[1] <- 0
-  eps_elk_s_ya[1] <- 0
-  eps_elk_s_oa[1] <- 0
-  eps_wolf_s_p[1] <- 0
-  eps_wolf_s_a[1] <- 0
+  # pre-regression years get direct priors rather than regression structure
+  for (t in 1:(regression_start_idx - 1)) {
+    logit(elk_s_c[t]) ~ dnorm(qlogis(0.22), 1 / 0.5^2)
+    logit(elk_s_ya[t]) ~ dnorm(qlogis(0.90), 1 / 0.5^2)
+    logit(elk_s_oa[t]) ~ dnorm(qlogis(0.80), 1 / 0.5^2)
+    logit(wolf_s_p[t]) ~ dnorm(qlogis(0.50), 1 / 0.5^2)
+    logit(wolf_s_a[t]) ~ dnorm(qlogis(0.90), 1 / 0.5^2)
+    
+    eps_elk_s_c[t] <- 0
+    eps_elk_s_ya[t] <- 0
+    eps_elk_s_oa[t] <- 0
+    eps_wolf_s_p[t] <- 0
+    eps_wolf_s_a[t] <- 0
+  }
   
   # standardize wolf and elk abundance to be used as predictors
   for (t in 1:n_years) {
@@ -463,7 +469,7 @@ icm_code <- nimbleCode({
   }
   
   # regressions
-  for (t in 2:n_years) {
+  for (t in regression_start_idx:n_years) {
     eps_elk_s_c[t] ~ dnorm(0, tau_calf)
     eps_elk_s_ya[t] ~ dnorm(0, tau_ya)
     eps_elk_s_oa[t] ~ dnorm(0, tau_oa)
@@ -517,6 +523,7 @@ icm_code <- nimbleCode({
 # constants
 icm_constants <- list(
   n_years = n_years,
+  regression_start_idx = regression_start_idx,
   wolf_tot_mean = mean(wolf_pop$total_abundance, na.rm = TRUE),
   wolf_tot_sd = sd(wolf_pop$total_abundance, na.rm = TRUE),
   elk_N_female_mean = mean(elk_dat_n$n_female, na.rm = TRUE),
