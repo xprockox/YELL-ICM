@@ -740,8 +740,23 @@ clusterEvalQ(cl, {
 clusterExport(
   cl,
   varlist = c(
-    "icm_code", "icm_data", "icm_constants", "icm_params",
-    "make_icm_inits", "run_one_chain", "ni", "nb", "th"
+    "icm_code",
+    "icm_data",
+    "icm_constants",
+    "icm_params",
+    "make_icm_inits",
+    "run_one_chain",
+    "ni",
+    "nb",
+    "th",
+    "n_years",
+    "elk_init_N1y",
+    "elk_init_Nya",
+    "elk_init_Noa",
+    "wolf_summer_pups",
+    "wolf_init_Np",
+    "wolf_init_Np_bio",
+    "wolf_init_Na"
   ),
   envir = environment()
 )
