@@ -225,8 +225,9 @@ annual_prism <- read.csv("data/covariates/prism_annual_precip_tmean.csv")
 bison <- read.csv("data/covariates/NR_Bison_Abundance.csv") %>%
   rename(year = Year)
 
-grizzly <- read.csv("data/covariates/grizzly_abundances_cleaned.csv") %>%
-  rename(griz_N = N) %>%
+grizzly <- read.csv("data/covariates/IGBST_abundances_1995-2024.csv") %>%
+  rename(griz_N = Mean,
+         year = Year) %>%
   select(year, griz_N)
 
 covars <- annual_prism %>%
