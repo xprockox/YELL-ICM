@@ -817,6 +817,7 @@ save(
   wolf_pop,
   covars,
   icm_constants,
+  run_time,
   file = "data/outputs/ICM_parallel_output_2026-05-26.RData"
 )
 ################################################################################
