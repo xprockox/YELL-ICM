@@ -1,10 +1,10 @@
 ### Integrated Community Model (ICM)
 ### Results exploration
-### Last updated: May 20, 2026
+### Last updated: May 27, 2026
 ### xprockox@gmail.com
 
 ################################################################################
-#########----------------- Results exploration -----------------################
+#########------------------- Load packages ---------------------################
 ################################################################################
 
 library(tidyverse)
@@ -14,8 +14,12 @@ library(cowplot)
 library(popbio)
 library(stringr)
 
+################################################################################
+############------------------ Load data ---------------------##################
+################################################################################
+
 # load model results
-load("data/outputs/ICM_parallel_output_2026-05-20.RData")
+load("data/outputs/ICM_parallel_output_2026-05-26.RData")
 
 # import elk data
 elk_dat_n <- read.csv("data/elk_abundanceEstimates_stages.csv")
@@ -38,7 +42,19 @@ wolf_pop <- wolf_pop[wolf_pop$seasonal.year %in% community_years,]
 #########---------------------- Settings -----------------------################
 ################################################################################
 
-ci_prob <- c(0.025, 0.975)
+# coefficient density plot selectors
+# - "all" = all coefficients in that group
+# - "intercepts" = only intercepts
+# - "non_intercepts" = everything except intercepts
+# - character vector = exact pretty labels to keep
+# - regex:<pattern> = regex matched against pretty labels e.g., "regex:YA"
+
+dens_coefs_elk <- "all"
+dens_coefs_wolf <- "all"
+
+################################################################################
+#########---------------- Data cleaning (labels) ----------------###############
+################################################################################
 
 elk_stage_map <- c(
   elk_N_1y = "Yearling",
@@ -69,33 +85,33 @@ wolf_vrate_map <- c(
 )
 
 pretty_coef_labels <- c(
-  beta0_calfSurv = "Calf intercept",
-  beta1_calfSurv_wolfN = "Calf wolf effect",
-  beta2_calfSurv_wintPPT = "Calf winter precipitation effect",
-  beta3_calfSurv_grizN = "Calf grizzly effect",
-  beta4_calfSurv_elkN = "Calf elk density effect",
-  beta0_yaSurv = "YA intercept",
-  beta1_yaSurv_wolfN = "YA wolf effect",
-  beta2_yaSurv_wintPPT = "YA winter precipitation effect",
-  beta3_yaSurv_grizN = "YA grizzly effect",
-  beta4_yaSurv_elkN = "YA elk density effect",
-  beta0_oaSurv = "OA intercept",
-  beta1_oaSurv_wolfN = "OA wolf effect",
-  beta2_oaSurv_wintPPT = "OA winter precipitation effect",
-  beta3_oaSurv_grizN = "OA grizzly effect",
-  beta4_oaSurv_elkN = "OA elk density effect",
-  beta0_wpupSurv = "Wolf pup intercept",
-  beta1_wpupSurv_elkN = "Wolf pup elk effect",
-  beta2_wpupSurv_bisonN = "Wolf pup bison effect",
-  beta3_wpupSurv_wolfN = "Wolf pup wolf density effect",
-  beta0_wadSurv = "Wolf adult intercept",
-  beta1_wadSurv_elkN = "Wolf adult elk effect",
-  beta2_wadSurv_bisonN = "Wolf adult bison effect",
-  beta3_wadSurv_wolfN = "Wolf adult wolf density effect"
+  beta0_calfSurv = "Calf survival intercept",
+  beta1_calfSurv_wolfN = "Calf survival wolf effect",
+  beta2_calfSurv_wintPPT = "Calf survival winter precipitation effect",
+  beta3_calfSurv_grizN = "Calf survival grizzly effect",
+  beta4_calfSurv_elkN = "Calf survival density dependence effect",
+  beta0_yaSurv = "YA survival intercept",
+  beta1_yaSurv_wolfN = "YA survival wolf effect",
+  beta2_yaSurv_wintPPT = "YA survival winter precipitation effect",
+  beta3_yaSurv_grizN = "YA survival grizzly effect",
+  beta4_yaSurv_elkN = "YA survival density dependence effect",
+  beta0_oaSurv = "OA survival intercept",
+  beta1_oaSurv_wolfN = "OA survival wolf effect",
+  beta2_oaSurv_wintPPT = "OA survival winter precipitation effect",
+  beta3_oaSurv_grizN = "OA survival grizzly effect",
+  beta4_oaSurv_elkN = "OA survival density dependence effect",
+  beta0_wpupSurv = "Wolf pup survival intercept",
+  beta1_wpupSurv_elkN = "Wolf pup survival elk effect",
+  beta2_wpupSurv_bisonN = "Wolf pup survival bison effect",
+  beta3_wpupSurv_wolfN = "Wolf pup survival density dependence effect",
+  beta0_wadSurv = "Wolf adult survival intercept",
+  beta1_wadSurv_elkN = "Wolf adult survival elk effect",
+  beta2_wadSurv_bisonN = "Wolf adult survival bison effect",
+  beta3_wadSurv_wolfN = "Wolf adult survival density dependence effect"
 )
 
 ################################################################################
-#########---------------------- Helpers -------------------------################
+#########------------------ Helper functions --------------------###############
 ################################################################################
 
 clean_mcmc_samples <- function(chain_samples) {
@@ -251,6 +267,32 @@ plot_vital_rates <- function(vrate_df, title) {
       title = title
     ) +
     theme(legend.position = "none")
+}
+
+resolve_coef_keep <- function(coef_names, label_map, keep = "all") {
+  pretty_names <- unname(label_map[coef_names])
+  pretty_names <- pretty_names[!is.na(pretty_names)]
+  
+  if (length(keep) == 1) {
+    if (identical(keep, "all")) {
+      return(pretty_names)
+    }
+    
+    if (identical(keep, "intercepts")) {
+      return(pretty_names[str_detect(pretty_names, regex("intercept", ignore_case = TRUE))])
+    }
+    
+    if (identical(keep, "non_intercepts")) {
+      return(pretty_names[!str_detect(pretty_names, regex("intercept", ignore_case = TRUE))])
+    }
+    
+    if (str_detect(keep, "^regex:")) {
+      pattern <- str_remove(keep, "^regex:")
+      return(pretty_names[str_detect(pretty_names, regex(pattern, ignore_case = TRUE))])
+    }
+  }
+  
+  pretty_names[pretty_names %in% keep]
 }
 
 ################################################################################
@@ -629,7 +671,7 @@ wolf_plot_elk <- plot_effect(
   x_label = "Wolf abundance",
   y_label = "Elk survival",
   title = "Estimated effect of wolf abundance on elk survival",
-  subtitle = "Winter precipitation, grizzly abundance, and elk abundance held constant",
+  subtitle = "Other predictors held constant at their means",
   fill_color = "#6F263D",
   line_color = "#6F263D"
 )
@@ -644,7 +686,7 @@ ppt_plot_elk <- plot_effect(
   x_label = "Winter precipitation",
   y_label = "Elk survival",
   title = "Estimated effect of winter precipitation on elk survival",
-  subtitle = "Wolf abundance, grizzly abundance, and elk abundance held constant",
+  subtitle = "Other predictors held constant at their means",
   fill_color = "#236192",
   line_color = "#236192"
 )
@@ -659,7 +701,7 @@ griz_plot_elk <- plot_effect(
   x_label = "Grizzly abundance",
   y_label = "Elk survival",
   title = "Estimated effect of grizzly abundance on elk survival",
-  subtitle = "Wolf abundance, winter precipitation, and elk abundance held constant",
+  subtitle = "Other predictors held constant at their means",
   fill_color = "#4B7F52",
   line_color = "#4B7F52"
 )
@@ -676,7 +718,7 @@ elkN_plot_elk <- plot_effect(
   x_label = "Elk abundance",
   y_label = "Elk survival",
   title = "Estimated effect of elk abundance on elk survival",
-  subtitle = "Wolf abundance, winter precipitation, and grizzly abundance held constant",
+  subtitle = "Other predictors held constant at their means",
   fill_color = "#8C510A",
   line_color = "#8C510A"
 )
@@ -693,7 +735,7 @@ wolf_main_plot <- plot_effect(
   x_label = "Elk female abundance",
   y_label = "Wolf survival",
   title = "Estimated effect of elk abundance on wolf survival",
-  subtitle = "Bison abundance and wolf abundance held constant",
+  subtitle = "Other predictors held constant at their means",
   fill_color = "#236192",
   line_color = "#236192"
 )
@@ -708,7 +750,7 @@ bison_plot_wolf <- plot_effect(
   x_label = "Bison abundance",
   y_label = "Wolf survival",
   title = "Estimated effect of bison abundance on wolf survival",
-  subtitle = "Elk abundance and wolf abundance held constant",
+  subtitle = "Other predictors held constant at their means",
   fill_color = "#6F263D",
   line_color = "#6F263D"
 )
@@ -725,7 +767,7 @@ wolfN_plot_wolf <- plot_effect(
   x_label = "Wolf abundance",
   y_label = "Wolf survival",
   title = "Estimated effect of wolf abundance on wolf survival",
-  subtitle = "Elk abundance and bison abundance held constant",
+  subtitle = "Other predictors held constant at their means",
   fill_color = "#4B7F52",
   line_color = "#4B7F52"
 )
@@ -734,16 +776,67 @@ wolfN_plot_wolf <- plot_effect(
 ##########----------------- Coefficient density plots -----------------#########
 ################################################################################
 
-make_coef_density_plot <- function(post_mat, coef_names, label_map, keep, fill_color, title, ncol) {
+make_coef_density_plot_grouped <- function(post_mat, coef_names, label_map,
+                                           keep = "all",
+                                           fill_color,
+                                           title,
+                                           effect_order = c(
+                                             "Intercept",
+                                             "Wolf",
+                                             "Winter precipitation",
+                                             "Grizzly",
+                                             "Elk",
+                                             "Bison"
+                                           ),
+                                           model_order = NULL) {
+  keep_resolved <- resolve_coef_keep(
+    coef_names = coef_names,
+    label_map = label_map,
+    keep = keep
+  )
+  
   df <- as_tibble(post_mat[, coef_names, drop = FALSE]) %>%
     pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
-    mutate(parameter = recode(parameter, !!!label_map))
+    mutate(
+      pretty = recode(parameter, !!!label_map)
+    ) %>%
+    filter(pretty %in% keep_resolved) %>%
+    mutate(
+      model_group = case_when(
+        str_detect(pretty, "^Calf survival") ~ "Calf survival",
+        str_detect(pretty, "^YA survival") ~ "YA survival",
+        str_detect(pretty, "^OA survival") ~ "OA survival",
+        str_detect(pretty, "^Wolf pup survival") ~ "Wolf pup survival",
+        str_detect(pretty, "^Wolf adult survival") ~ "Wolf adult survival",
+        TRUE ~ "Other"
+      ),
+      effect_type = case_when(
+        str_detect(pretty, regex("intercept", ignore_case = TRUE)) ~ "Intercept",
+        str_detect(pretty, regex("winter precipitation effect", ignore_case = TRUE)) ~ "Winter precipitation",
+        str_detect(pretty, regex("grizzly effect", ignore_case = TRUE)) ~ "Grizzly abundance",
+        str_detect(pretty, regex("bison effect", ignore_case = TRUE)) ~ "Bison abundance",
+        str_detect(pretty, regex("density dependence effect", ignore_case = TRUE)) ~ "Density dependence",
+        str_detect(pretty, regex("wolf effect", ignore_case = TRUE)) ~ "Wolf abundance",
+        str_detect(pretty, regex("elk effect", ignore_case = TRUE)) ~ "Elk abundance",
+        TRUE ~ pretty
+      )
+    )
   
-  ggplot(df %>% filter(parameter %in% keep), aes(x = value)) +
+  # force column order
+  df <- df %>%
+    mutate(effect_type = factor(effect_type, levels = effect_order))
+  
+  # optional row order
+  if (!is.null(model_order)) {
+    df <- df %>%
+      mutate(model_group = factor(model_group, levels = model_order))
+  }
+  
+  ggplot(df, aes(x = value)) +
     geom_density(fill = fill_color, alpha = 0.45) +
     geom_vline(xintercept = 0, linetype = 2) +
-    facet_wrap(~parameter, scales = "free", ncol = ncol) +
-    theme_classic() +
+    facet_grid(model_group ~ effect_type, scales = "free") +
+    theme_bw() +
     labs(
       x = "Posterior value",
       y = "Density",
@@ -751,7 +844,7 @@ make_coef_density_plot <- function(post_mat, coef_names, label_map, keep, fill_c
     )
 }
 
-coef_plot <- make_coef_density_plot(
+elk_coef_plot <- make_coef_density_plot_grouped(
   post_mat = post_mat,
   coef_names = c(
     "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_wintPPT", "beta3_calfSurv_grizN", "beta4_calfSurv_elkN",
@@ -759,23 +852,36 @@ coef_plot <- make_coef_density_plot(
     "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", "beta4_oaSurv_elkN"
   ),
   label_map = pretty_coef_labels,
-  keep = c("Calf intercept", "Calf grizzly effect", "OA intercept", "OA grizzly effect", "YA intercept", "YA grizzly effect"),
+  keep = dens_coefs_elk,
   fill_color = "#236192",
   title = "Posterior distributions of elk regression coefficients",
-  ncol = 6
+  effect_order = c(
+    "Intercept",
+    "Wolf abundance",
+    "Grizzly abundance",
+    "Winter precipitation",
+    "Density dependence"
+  ),  
+  model_order = c("Calf survival", "YA survival", "OA survival")
 )
 
-wolf_coef_plot <- make_coef_density_plot(
+wolf_coef_plot <- make_coef_density_plot_grouped(
   post_mat = post_mat,
   coef_names = c(
     "beta0_wpupSurv", "beta1_wpupSurv_elkN", "beta2_wpupSurv_bisonN", "beta3_wpupSurv_wolfN",
     "beta0_wadSurv", "beta1_wadSurv_elkN", "beta2_wadSurv_bisonN", "beta3_wadSurv_wolfN"
   ),
   label_map = pretty_coef_labels,
-  keep = c("Wolf pup intercept", "Wolf pup bison effect", "Wolf adult intercept", "Wolf adult bison effect"),
+  keep = dens_coefs_wolf,
   fill_color = "#6F263D",
   title = "Posterior distributions of wolf regression coefficients",
-  ncol = 4
+  effect_order = c(
+    "Intercept",
+    "Elk abundance",
+    "Bison abundance",
+    "Density dependence"
+  ),
+  model_order = c("Wolf pup survival", "Wolf adult survival")
 )
 
 ################################################################################
@@ -929,9 +1035,89 @@ elasticity_combo <- plot_grid(
 )
 
 ################################################################################
-##########----------------- Wolf change summaries -----------------#############
+############---------------------- Final plots ----------------------###########
 ################################################################################
 
+# abundance validation and vital rates
+elk_validation_plot
+wolf_validation_plot
+elk_vrate_plot
+wolf_vrate_plot
+
+# elk regressions
+wolf_plot_elk
+ppt_plot_elk
+griz_plot_elk
+elkN_plot_elk
+elk_coef_plot
+
+# wolf regressions
+wolf_main_plot
+bison_plot_wolf
+wolfN_plot_wolf
+wolf_coef_plot
+
+# elasticity
+lambda_plot
+elasticity_bar_plot
+elasticity_combo
+
+################################################################################
+##########-------------- Population change summaries --------------#############
+################################################################################
+
+# calculate summary statistics for elk
+elk_total_df <- elk_N_summ %>% 
+  filter(stage == "Total Females") %>% 
+  arrange(year) %>%
+  drop_na()
+
+elk_yearling_df <- elk_N_summ %>% 
+  filter(stage == "Yearling") %>% 
+  arrange(year) %>%
+  drop_na()
+
+elk_ya_df <- elk_N_summ %>% 
+  filter(stage == "Young Adult") %>% 
+  arrange(year) %>%
+  drop_na()
+
+elk_oa_df <- elk_N_summ %>% 
+  filter(stage == "Old Adult") %>% 
+  arrange(year) %>%
+  drop_na()
+
+elk_first_year <- min(elk_total_df$year, na.rm = TRUE)
+elk_last_year <- max(elk_total_df$year, na.rm = TRUE)
+
+elk_first_total <- elk_total_df$mean[elk_total_df$year == elk_first_year]
+elk_last_total <- elk_total_df$mean[elk_total_df$year == elk_last_year]
+
+elk_pct_change <- 100 * (elk_last_total - elk_first_total) / elk_first_total
+elk_lambda_geom <- (elk_last_total / elk_first_total)^(1 / (elk_last_year - elk_first_year))
+elk_annual_pct_change <- 100 * (elk_lambda_geom - 1)
+
+elk_stage_df <- elk_yearling_df %>%
+  select(year, yearling_mean = mean) %>%
+  left_join(elk_ya_df %>% select(year, ya_mean = mean), by = "year") %>%
+  left_join(elk_oa_df %>% select(year, oa_mean = mean), by = "year") %>%
+  mutate(
+    total_mean = yearling_mean + ya_mean + oa_mean,
+    prop_yearling = yearling_mean / total_mean,
+    prop_ya = ya_mean / total_mean,
+    prop_oa = oa_mean / total_mean
+  )
+
+elk_first_prop_yearling <- elk_stage_df$prop_yearling[elk_stage_df$year == elk_first_year]
+elk_last_prop_yearling <- elk_stage_df$prop_yearling[elk_stage_df$year == elk_last_year]
+
+elk_first_prop_ya <- elk_stage_df$prop_ya[elk_stage_df$year == elk_first_year]
+elk_last_prop_ya <- elk_stage_df$prop_ya[elk_stage_df$year == elk_last_year]
+
+elk_first_prop_oa <- elk_stage_df$prop_oa[elk_stage_df$year == elk_first_year]
+elk_last_prop_oa <- elk_stage_df$prop_oa[elk_stage_df$year == elk_last_year]
+
+# calculate summary statistics for wolves
 wolf_total_df <- wolf_N_summ %>% 
   filter(stage == "Total Wolves") %>% 
   arrange(year) %>%
@@ -971,52 +1157,155 @@ wolf_last_prop_pup <- wolf_stage_df$prop_pup[wolf_stage_df$year == wolf_last_yea
 wolf_first_prop_adult <- wolf_stage_df$prop_adult[wolf_stage_df$year == wolf_first_year]
 wolf_last_prop_adult <- wolf_stage_df$prop_adult[wolf_stage_df$year == wolf_last_year]
 
-cat("Wolf abundance summary\n")
-cat("----------------------\n")
-cat("Years:", wolf_first_year, "to", wolf_last_year, "\n")
-cat("First-year total wolves:", round(wolf_first_total, 0), "\n")
-cat("Last-year total wolves:", round(wolf_last_total, 0), "\n")
-cat("Percent change:", round(wolf_pct_change, 1), "%\n")
-cat("Geometric lambda:", round(wolf_lambda_geom, 3), "\n")
-cat("Annual percent change:", round(wolf_annual_pct_change, 1), "%\n\n")
-
-cat("Wolf stage structure summary\n")
-cat("----------------------------\n")
-cat("Pup proportion:", wolf_first_year, "=", round(100 * wolf_first_prop_pup, 1),
-    "%;", wolf_last_year, "=", round(100 * wolf_last_prop_pup, 1), "%\n")
-cat("Adult proportion:", wolf_first_year, "=", round(100 * wolf_first_prop_adult, 1),
-    "%;", wolf_last_year, "=", round(100 * wolf_last_prop_adult, 1), "%\n")
+# summarize both elk and wolves
+cat(
+  " ----------------------------\n",
+  "------  ELK SUMMARY  -------\n",
+  "----------------------------\n\n",
+  
+  "---------------------\n",
+  " Population growth\n",
+  "---------------------\n",
+  paste0("Years: ", elk_first_year, " to ", elk_last_year, "\n"),
+  paste0("First-year total females: ", round(elk_first_total, 0), "\n"),
+  paste0("Last-year total females: ", round(elk_last_total, 0), "\n"),
+  paste0("Percent change: ", round(elk_pct_change, 1), "%\n"),
+  paste0("Geometric lambda: ", round(elk_lambda_geom, 3), "\n"),
+  paste0("Annual percent change: ", round(elk_annual_pct_change, 1), "%\n\n"),
+  "---------------------\n",
+  "Stage structure\n",
+  "---------------------\n",
+  paste0(
+    "Yearling proportion: ",
+    elk_first_year, " = ", round(100 * elk_first_prop_yearling, 1),
+    "%; ",
+    elk_last_year, " = ", round(100 * elk_last_prop_yearling, 1), "%\n"
+  ),
+  paste0(
+    "Young adult proportion: ",
+    elk_first_year, " = ", round(100 * elk_first_prop_ya, 1),
+    "%; ",
+    elk_last_year, " = ", round(100 * elk_last_prop_ya, 1), "%\n"
+  ),
+  paste0(
+    "Old adult proportion: ",
+    elk_first_year, " = ", round(100 * elk_first_prop_oa, 1),
+    "%; ",
+    elk_last_year, " = ", round(100 * elk_last_prop_oa, 1), "%\n\n"
+  ),
+  "----------------------------\n",
+  "------  WOLF SUMMARY  ------\n",
+  "----------------------------\n\n",
+  
+  "---------------------\n",
+  " Population growth\n",
+  "---------------------\n",
+  paste0("Years: ", wolf_first_year, " to ", wolf_last_year, "\n"),
+  paste0("First-year total wolves: ", round(wolf_first_total, 0), "\n"),
+  paste0("Last-year total wolves: ", round(wolf_last_total, 0), "\n"),
+  paste0("Percent change: ", round(wolf_pct_change, 1), "%\n"),
+  paste0("Geometric lambda: ", round(wolf_lambda_geom, 3), "\n"),
+  paste0("Annual percent change: ", round(wolf_annual_pct_change, 1), "%\n\n"),
+  
+  "---------------------\n",
+  "Stage structure\n",
+  "---------------------\n",
+  paste0(
+    "Pup proportion: ",
+    wolf_first_year, " = ", round(100 * wolf_first_prop_pup, 1),
+    "%; ",
+    wolf_last_year, " = ", round(100 * wolf_last_prop_pup, 1), "%\n"
+  ),
+  paste0(
+    "Adult proportion: ",
+    wolf_first_year, " = ", round(100 * wolf_first_prop_adult, 1),
+    "%; ",
+    wolf_last_year, " = ", round(100 * wolf_last_prop_adult, 1), "%\n"
+  )
+)
 
 ################################################################################
-################################ Final panels ##################################
+##########----------------- Coefficient summaries -----------------#############
 ################################################################################
 
-elk_panel <- plot_grid(
-  wolf_plot_elk,
-  ppt_plot_elk,
-  griz_plot_elk,
-  elkN_plot_elk,
-  coef_plot,
-  ncol = 1,
-  rel_heights = c(1.1, 1.1, 1.1, 1.1, 1),
-  labels = c("A", "B", "C", "D", "E")
+cat(
+  " --------------------------------------------------------\n",
+  "COEFFICIENT SUMMARY\n",
+  "--------------------------------------------------------\n\n",
+  
+  "-----------------------------------\n",
+  "Strong evidence (95% CI excludes 0)\n",
+  "-----------------------------------\n",
+  paste0(
+    "- ",
+    strong_effects %>%
+      filter(!grepl("intercept", label, ignore.case = TRUE)) %>%
+      transmute(
+        text = paste0(
+          label, ": median = ", round(median, 3),
+          ", 95% CI [", round(ci95_low, 3), ", ", round(ci95_high, 3), "]",
+          ", direction = ", direction
+        )
+      ) %>%
+      pull(text),
+    collapse = "\n"
+  ),
+  "\n\n",
+  
+  "-----------------------------------\n",
+  "Moderate evidence (95% CI includes 0, 80% CI excludes 0)\n",
+  "-----------------------------------\n",
+  paste0(
+    "- ",
+    moderate_effects %>%
+      filter(!grepl("intercept", label, ignore.case = TRUE)) %>%
+      transmute(
+        text = paste0(
+          label, ": median = ", round(median, 3),
+          ", 80% CI [", round(ci80_low, 3), ", ", round(ci80_high, 3), "]",
+          ", direction = ", direction
+        )
+      ) %>%
+      pull(text),
+    collapse = "\n"
+  ),
+  "\n\n",
+  
+  "-----------------------------------\n",
+  "Weak evidence (80% CI includes 0, 50% CI excludes 0)\n",
+  "-----------------------------------\n",
+  paste0(
+    "- ",
+    weak_effects %>%
+      filter(!grepl("intercept", label, ignore.case = TRUE)) %>%
+      transmute(
+        text = paste0(
+          label, ": median = ", round(median, 3),
+          ", 50% CI [", round(ci50_low, 3), ", ", round(ci50_high, 3), "]",
+          ", direction = ", direction
+        )
+      ) %>%
+      pull(text),
+    collapse = "\n"
+  ),
+  "\n\n",
+  
+  "-----------------------------------\n",
+  "Little / no evidence (50% CI includes 0)\n",
+  "-----------------------------------\n",
+  paste0(
+    "- ",
+    little_effects %>%
+      filter(!grepl("intercept", label, ignore.case = TRUE)) %>%
+      transmute(
+        text = paste0(
+          label, ": median = ", round(median, 3),
+          ", 50% CI [", round(ci50_low, 3), ", ", round(ci50_high, 3), "]",
+          ", direction = ", direction
+        )
+      ) %>%
+      pull(text),
+    collapse = "\n"
+  ),
+  "\n"
 )
-
-wolf_panel <- plot_grid(
-  wolf_main_plot,
-  bison_plot_wolf,
-  wolfN_plot_wolf,
-  wolf_coef_plot,
-  ncol = 1,
-  rel_heights = c(1.2, 1.2, 1.2, 1),
-  labels = c("F", "G", "H", "I")
-)
-
-all_regression_plots <- plot_grid(
-  elk_panel,
-  wolf_panel,
-  ncol = 2,
-  rel_widths = c(1, 1)
-)
-
-all_regression_plots
