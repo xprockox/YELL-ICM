@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Results exploration
-### Last updated: May 27, 2026
+### Last updated: May 28, 2026
 ### xprockox@gmail.com
 
 ################################################################################
@@ -37,6 +37,8 @@ wolf_pop <- switch(
   stop("wolf_range must be 'NR' or 'full'")
 )
 wolf_pop <- wolf_pop[wolf_pop$seasonal.year %in% community_years,]
+
+regression_years <- setdiff(community_years, drop_regression_years)
 
 ################################################################################
 #########---------------------- Settings -----------------------################
@@ -429,34 +431,39 @@ wolf_vrate_plot <- plot_vital_rates(
 ##########----------------- Plotting data builders -----------------############
 ################################################################################
 
+regression_years <- setdiff(community_years, 1995:1997)
+
 elk_surv_pts <- bind_rows(
   elk_vrates2 %>%
-    filter(param_base == "Calf survival (s_c)") %>%
+    filter(param_base == "Calf survival (s_c)", year %in% regression_years) %>%
     transmute(year, elk_surv = mean, elk_low = low, elk_high = high, stage = "Calf survival"),
   elk_vrates2 %>%
-    filter(param_base == "Young Adult survival (s_ya)") %>%
+    filter(param_base == "Young Adult survival (s_ya)", year %in% regression_years) %>%
     transmute(year, elk_surv = mean, elk_low = low, elk_high = high, stage = "Young adult survival"),
   elk_vrates2 %>%
-    filter(param_base == "Old Adult survival (s_oa)") %>%
+    filter(param_base == "Old Adult survival (s_oa)", year %in% regression_years) %>%
     transmute(year, elk_surv = mean, elk_low = low, elk_high = high, stage = "Old adult survival")
 )
 
 wolf_surv_pts <- bind_rows(
   wolf_vrates2 %>%
-    filter(param_base == "Pup survival (s_p)") %>%
+    filter(param_base == "Pup survival (s_p)", year %in% regression_years) %>%
     transmute(year, wolf_surv = mean, wolf_low = low, wolf_high = high, stage = "Pup survival"),
   wolf_vrates2 %>%
-    filter(param_base == "Adult survival (s_a)") %>%
+    filter(param_base == "Adult survival (s_a)", year %in% regression_years) %>%
     transmute(year, wolf_surv = mean, wolf_low = low, wolf_high = high, stage = "Adult survival")
 )
 
 wolf_pts <- summarize_indexed_draws(post_mat, "wolf_N_tot", community_years, "wolf_N_tot") %>%
+  filter(year %in% regression_years) %>%
   rename(wolf_low = low, wolf_high = high)
 
 elk_abund_pts <- summarize_indexed_draws(post_mat, "elk_N_female", community_years, "elk_N_female") %>%
+  filter(year %in% regression_years) %>%
   rename(elk_low_x = low, elk_high_x = high)
 
 wolf_abund_pts <- summarize_indexed_draws(post_mat, "wolf_N_tot", community_years, "wolf_N_tot") %>%
+  filter(year %in% regression_years) %>%
   rename(wolfN_low = low, wolfN_high = high)
 
 plot_df_elk <- elk_surv_pts %>%
@@ -538,7 +545,7 @@ predictor_specs <- list(
   ),
   winter_ppt_mm = list(
     raw_col = "winter_ppt_mm",
-    raw_df = covars,
+    raw_df = covars %>% filter(year %in% regression_years),
     std_fun = function(x) (x - mean(covars$winter_ppt_mm, na.rm = TRUE)) / sd(covars$winter_ppt_mm, na.rm = TRUE),
     held_value = 0,
     xmin = NULL,
@@ -547,7 +554,7 @@ predictor_specs <- list(
   ),
   griz_N = list(
     raw_col = "griz_N",
-    raw_df = covars,
+    raw_df = covars %>% filter(year %in% regression_years),
     std_fun = function(x) (x - mean(covars$griz_N, na.rm = TRUE)) / sd(covars$griz_N, na.rm = TRUE),
     held_value = 0,
     xmin = NULL,
@@ -565,7 +572,7 @@ predictor_specs <- list(
   ),
   NR_Bison = list(
     raw_col = "NR_Bison",
-    raw_df = covars,
+    raw_df = covars %>% filter(year %in% regression_years),
     std_fun = function(x) (x - mean(covars$NR_Bison, na.rm = TRUE)) / sd(covars$NR_Bison, na.rm = TRUE),
     held_value = 0,
     xmin = NULL,
@@ -628,8 +635,10 @@ plot_effect <- function(plot_df, curve_df, x_var, y_var, ymin_var, ymax_var,
       color = line_color,
       linewidth = 1
     ) +
-    geom_errorbar(aes(ymin = .data[[ymin_var]], ymax = .data[[ymax_var]]), width = 0) +
-    geom_point(shape = 21, fill = "gold", color = "black", size = 2) +
+    geom_errorbar(
+      aes(ymin = .data[[ymin_var]], ymax = .data[[ymax_var]]),
+      width = 0
+    ) +
     facet_wrap(~stage, scales = "free_y") +
     theme_classic() +
     labs(
@@ -640,10 +649,15 @@ plot_effect <- function(plot_df, curve_df, x_var, y_var, ymin_var, ymax_var,
     )
   
   if (!is.null(xlow_var) && !is.null(xhigh_var)) {
-    p <- p + geom_errorbarh(aes(xmin = .data[[xlow_var]], xmax = .data[[xhigh_var]]), height = 0)
+    p <- p + geom_errorbarh(
+      aes(xmin = .data[[xlow_var]], xmax = .data[[xhigh_var]]),
+      height = 0,
+      alpha = 0.6
+    )
   }
   
-  p
+  p +
+    geom_point(shape = 21, fill = "gold", color = "black", size = 2)
 }
 
 ################################################################################
