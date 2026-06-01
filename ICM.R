@@ -455,22 +455,6 @@ icm_code <- nimbleCode({
     elk_calves_born[t] <- elk_f_ya[t] * elk_N_ya[t] +
       elk_f_oa[t] * elk_N_oa[t]
   }
-
-  # standardize over years used in the grizzly regression
-  elk_calves_born_mean <- sum(elk_calves_born[1:(n_years - 1)]) / (n_years - 1)
-
-  for (t in 1:(n_years - 1)) {
-    elk_calves_born_sqdev[t] <- (elk_calves_born[t] - elk_calves_born_mean) *
-      (elk_calves_born[t] - elk_calves_born_mean)
-  }
-
-  elk_calves_born_var <- sum(elk_calves_born_sqdev[1:(n_years - 1)]) / (n_years - 2)
-  elk_calves_born_sd <- sqrt(elk_calves_born_var + 1e-6)
-
-  for (t in 1:(n_years - 1)) {
-    elk_calves_born_std[t] <- (elk_calves_born[t] - elk_calves_born_mean) /
-      elk_calves_born_sd
-  }
   
   ###
   ##
@@ -481,7 +465,7 @@ icm_code <- nimbleCode({
     # for now, expected abundance in year t depends on abundance in year t - 1 + some effect of elk calves
     griz_mu[t] <-
       griz_logN[t - 1] +
-      beta1_griz_elkCalves * elk_calves_born_std[t - 1]# + 
+      beta1_griz_elkCalves * log(elk_calves_born[t - 1] + 1e-6)# + 
     #   beta2_griz_x2 * griz_x2_std[t - 1] +
     #   beta3_griz_x3 * griz_x3_std[t - 1] # leaving these to make it easier to add more covariates as needed
 
@@ -511,7 +495,7 @@ icm_code <- nimbleCode({
   }
   
   # priors for grizzly process covariates (uncomment as added)
-  beta1_griz_elkCalves ~ dnorm(0, 1 / 0.3^2)
+  beta1_griz_elkCalves ~ dnorm(0, 1 / 1^2)
   # beta2_griz_x2 ~ dnorm(0, 1 / 0.3^2)
   # beta3_griz_x3 ~ dnorm(0, 1 / 0.3^2)
 
@@ -826,7 +810,7 @@ icm_params <- c(
   "wolf_N_p_sum", "wolf_N_p", "wolf_N_a", "wolf_N_tot",
   # grizzly abundances and vars for state-space model
   "griz_N", "griz_logN", "griz_sigma_obs", "griz_sigma_proc", "beta1_griz_elkCalves",
-  "griz_mu", "elk_calves_born", "elk_calves_born_std", "griz_N_std",
+  "griz_mu", "elk_calves_born", "griz_N_std",
   # elk survival regression covariates
   "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_wintPPT", "beta3_calfSurv_grizN", "beta4_calfSurv_elkN",
   "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", "beta4_yaSurv_elkN",
