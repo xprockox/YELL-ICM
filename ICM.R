@@ -14,7 +14,8 @@ library(cowplot)
 library(popbio)
 library(parallel)
 
-wolf_range <- "full"
+wolf_range <- "full" # can be "NR" or "full"
+grizzly_range <- "park" # can be "NR" or "park" or "full"
 drop_regression_years <- 1995:1997
 
 ################################################################################
@@ -220,22 +221,50 @@ wolf_a <- extract_marray_inputs(wolf_y, wolf_is_class2, "adult")
 ############################## Load covariates #################################
 ################################################################################
 
+# import prism data
 annual_prism <- read.csv("data/covariates/prism_annual_precip_tmean.csv")
 
+# import bison data
 bison <- read.csv("data/covariates/NR_Bison_Abundance.csv") %>%
   rename(year = Year)
 
-grizzly <- read.csv("data/covariates/IGBST_abundances_1995-2024.csv") %>%
-  rename(griz_N = Mean,
-         year = Year) %>%
-  select(year, griz_N)
+# import grizzly data using conditional logic
+if (grizzly_range %in% c("NR", "park")) {
+  grizzly <- read.csv("data/covariates/annual_grizzly_estimates_by_polygon.csv")
+  
+  polygon_keep <- if (grizzly_range == "NR") {
+    "Northern Range"
+  } else {
+    "Yellowstone National Park"
+  }
+  
+  grizzly <- grizzly %>%
+    filter(polygon_name == polygon_keep) %>%
+    rename(griz_N = estimated_grizzlies) %>%
+    select(year, griz_N)
+} else if (grizzly_range == "full") {
+  grizzly <- read.csv("data/covariates/IGBST_abundances_1995-2024.csv") %>%
+    rename(
+      griz_N = Mean,
+      year = Year
+    ) %>%
+    select(year, griz_N)
+} else {
+  stop("grizzly_range must be 'NR', 'park', or 'full'")
+}
 
+# grizzly data only goes to 2020, so we need to add some NAs at the end to have the model estimate years after
+grizzly <- tibble(year = community_years) %>%
+  left_join(grizzly, by = "year")
+
+# combine all covars into same df
 covars <- annual_prism %>%
   left_join(bison, by = "year") %>%
   left_join(grizzly, by = "year") %>%
   filter(year %in% community_years) %>%
   arrange(match(year, community_years))
 
+# standardize all covars
 covars_std <- covars %>%
   mutate(across(-year, ~ as.numeric(scale(.))))
 
@@ -341,7 +370,7 @@ icm_code <- nimbleCode({
   ########## WOLF SUBMODEL ##########
   
   # prior for fecundity
-  for (t in 1:n_years) {
+  for (t in 1:(n_years-1)) {
     wolf_f[t] ~ dgamma(2, 2)
   }
   
@@ -405,9 +434,90 @@ icm_code <- nimbleCode({
     wolf_marray_a[r, 1:n_years] ~ dmulti(wolf_marr_prob_a[r, 1:n_years], wolf_rel_a[r])
   }
   
-  ########## REGRESSIONS ##########
+  ########## GRIZZLY SUBMODEL ##########
   
-  # priors
+  # latent grizzly abundance the first year as a logNormal variable with mean = first year's obs
+  griz_logN[1] ~ dnorm(log(griz_obs[1] + 1e-6), 1 / 0.5^2)
+  
+  #
+  ##
+  ###
+  
+  # since our abundance estimates are the pre-birth-pulse estimates,
+  # we don't actually estimate the number of "calves" (instead, we do yearlings).
+  # therefore, in order to estimate the number of calves that grizzlies would prey on,
+  # we need to know how many total were born.
+  # previously, we estimated how many would be expected to be born from young & old adults
+  # separately. so now, we just derive total as the sum (deterministically)
+
+  # total calves born in each year (available to grizzlies)
+  for (t in 1:(n_years - 1)) {
+    elk_calves_born[t] <- elk_f_ya[t] * elk_N_ya[t] +
+      elk_f_oa[t] * elk_N_oa[t]
+  }
+
+  # standardize over years used in the grizzly regression
+  elk_calves_born_mean <- sum(elk_calves_born[1:(n_years - 1)]) / (n_years - 1)
+
+  for (t in 1:(n_years - 1)) {
+    elk_calves_born_sqdev[t] <- (elk_calves_born[t] - elk_calves_born_mean) *
+      (elk_calves_born[t] - elk_calves_born_mean)
+  }
+
+  elk_calves_born_var <- sum(elk_calves_born_sqdev[1:(n_years - 1)]) / (n_years - 2)
+  elk_calves_born_sd <- sqrt(elk_calves_born_var + 1e-6)
+
+  for (t in 1:(n_years - 1)) {
+    elk_calves_born_std[t] <- (elk_calves_born[t] - elk_calves_born_mean) /
+      elk_calves_born_sd
+  }
+  
+  ###
+  ##
+  #
+  
+  for (t in 2:n_years) {
+    
+    # for now, expected abundance in year t depends on abundance in year t - 1 + some effect of elk calves
+    griz_mu[t] <-
+      griz_logN[t - 1] +
+      beta1_griz_elkCalves * elk_calves_born_std[t - 1]# + 
+    #   beta2_griz_x2 * griz_x2_std[t - 1] +
+    #   beta3_griz_x3 * griz_x3_std[t - 1] # leaving these to make it easier to add more covariates as needed
+
+    griz_logN[t] ~ dnorm(griz_mu[t], griz_tau_proc)
+  }
+  
+  # convert latent abundance back to natural scale
+  for (t in 1:n_years) {
+    griz_N[t] <- exp(griz_logN[t])
+  }
+  
+  # observation error prior
+  griz_sigma_obs ~ dunif(0.05, 2)
+  griz_tau_obs <- 1 / (griz_sigma_obs^2)
+  
+  for (t in 1:n_years) {
+    griz_obs[t] ~ dlnorm(griz_logN[t], griz_tau_obs)
+  }
+  
+  # process error prior
+  griz_sigma_proc ~ dunif(0.01, 1)
+  griz_tau_proc <- 1 / (griz_sigma_proc^2)
+  
+  # standardize grizzly abundance for use in elk regressions
+  for (t in 1:n_years) {
+    griz_N_std[t] <- (griz_N[t] - griz_N_mean) / griz_N_sd
+  }
+  
+  # priors for grizzly process covariates (uncomment as added)
+  beta1_griz_elkCalves ~ dnorm(0, 1 / 0.3^2)
+  # beta2_griz_x2 ~ dnorm(0, 1 / 0.3^2)
+  # beta3_griz_x3 ~ dnorm(0, 1 / 0.3^2)
+
+  ########## ELK AND WOLF SURVIVAL REGRESSIONS ##########
+  
+  # elk regression priors
   beta0_calfSurv ~ dnorm(qlogis(0.22), 1 / 0.3^2)
   beta1_calfSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_calfSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
@@ -426,6 +536,15 @@ icm_code <- nimbleCode({
   beta3_oaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
   beta4_oaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   
+  sigma_calf ~ dunif(0, 0.5)
+  sigma_ya ~ dunif(0, 0.3)
+  sigma_oa ~ dunif(0, 0.3)
+  
+  tau_calf <- 1 / (sigma_calf^2)
+  tau_ya <- 1 / (sigma_ya^2)
+  tau_oa <- 1 / (sigma_oa^2)
+  
+  # wolf regression priors
   beta0_wpupSurv ~ dnorm(qlogis(0.5), 1 / 0.3^2)
   beta1_wpupSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   beta2_wpupSurv_bisonN ~ dnorm(0, 1 / 0.3^2)
@@ -435,16 +554,10 @@ icm_code <- nimbleCode({
   beta1_wadSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   beta2_wadSurv_bisonN ~ dnorm(0, 1 / 0.3^2)
   beta3_wadSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
-  
-  sigma_calf ~ dunif(0, 0.5)
-  sigma_ya ~ dunif(0, 0.3)
-  sigma_oa ~ dunif(0, 0.3)
+
   sigma_wpup ~ dunif(0, 0.5)
   sigma_wad ~ dunif(0, 0.3)
-  
-  tau_calf <- 1 / (sigma_calf^2)
-  tau_ya <- 1 / (sigma_ya^2)
-  tau_oa <- 1 / (sigma_oa^2)
+
   tau_wpup <- 1 / (sigma_wpup^2)
   tau_wad <- 1 / (sigma_wad^2)
   
@@ -481,7 +594,7 @@ icm_code <- nimbleCode({
       beta0_calfSurv +
       beta1_calfSurv_wolfN * wolf_N_tot_std[t - 1] +
       beta2_calfSurv_wintPPT * wintPPT[t] +
-      beta3_calfSurv_grizN * grizN_std[t - 1] +
+      beta3_calfSurv_grizN * griz_N_std[t - 1] +
       beta4_calfSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_c[t]
     
@@ -489,7 +602,7 @@ icm_code <- nimbleCode({
       beta0_yaSurv +
       beta1_yaSurv_wolfN * wolf_N_tot_std[t - 1] +
       beta2_yaSurv_wintPPT * wintPPT[t] +
-      beta3_yaSurv_grizN * grizN_std[t - 1] +
+      beta3_yaSurv_grizN * griz_N_std[t - 1] +
       beta4_yaSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_ya[t]
     
@@ -497,7 +610,7 @@ icm_code <- nimbleCode({
       beta0_oaSurv +
       beta1_oaSurv_wolfN * wolf_N_tot_std[t - 1] +
       beta2_oaSurv_wintPPT * wintPPT[t] +
-      beta3_oaSurv_grizN * grizN_std[t - 1] +
+      beta3_oaSurv_grizN * griz_N_std[t - 1] +
       beta4_oaSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_oa[t]
     
@@ -523,12 +636,18 @@ icm_code <- nimbleCode({
 
 # constants
 icm_constants <- list(
+  # for the mechanics of the model
   n_years = n_years,
   regression_start_idx = regression_start_idx,
+  # wolves
   wolf_tot_mean = mean(wolf_pop$total_abundance, na.rm = TRUE),
   wolf_tot_sd = sd(wolf_pop$total_abundance, na.rm = TRUE),
+  # elk
   elk_N_female_mean = mean(elk_dat_n$n_female, na.rm = TRUE),
-  elk_N_female_sd = sd(elk_dat_n$n_female, na.rm = TRUE)
+  elk_N_female_sd = sd(elk_dat_n$n_female, na.rm = TRUE),
+  # grizzlies
+  griz_N_mean = mean(grizzly$griz_N, na.rm = TRUE),
+  griz_N_sd = sd(grizzly$griz_N, na.rm = TRUE)
 )
 
 # data
@@ -559,7 +678,7 @@ icm_data <- list(
   # covars
   wintPPT = covars_std$winter_ppt_mm,
   bisonN_std = covars_std$NR_Bison,
-  grizN_std = covars_std$griz_N
+  griz_obs = grizzly$griz_N
 )
 
 # initial values
@@ -602,23 +721,45 @@ wolf_init_Np_bio[1] <- 0
 
 wolf_init_Na <- pmax(1, round(wolf_init_Ntot - wolf_init_Np))
 
+griz_init_logN <- log(pmax(1, ifelse(
+  is.na(grizzly$griz_N),
+  mean(grizzly$griz_N, na.rm = TRUE),
+  grizzly$griz_N
+)))
+
 make_icm_inits <- function() {
   list(
+    # elk demography
     elk_p_13 = rep(0.15, n_years),
     elk_f_ya = rep(0.76, n_years - 1),
     elk_f_oa = rep(0.64, n_years - 1),
+    # elk observation error
     elk_sigma_obs_female = 0.30,
+    elk_p_det = runif(n_years, 0.6, 0.95),
+    # elk abundances
     elk_N_1y = elk_init_N1y,
     elk_N_ya = elk_init_Nya,
     elk_N_oa = elk_init_Noa,
-    elk_p_det = runif(n_years, 0.6, 0.95),
-    wolf_f = rep(1.0, n_years),
+    # wolf demography
+    wolf_f = rep(1.0, n_years - 1),
+    # wolf observation error
     wolf_sigma_obs = 0.2,
+    wolf_p_det = runif(n_years, 0.6, 0.95),
+    # wolf abundances
     wolf_N_p_sum = pmax(1, round(wolf_summer_pups)),
     wolf_N_p = wolf_init_Np,
     wolf_N_p_bio = wolf_init_Np_bio,
     wolf_N_a = wolf_init_Na,
-    wolf_p_det = runif(n_years, 0.6, 0.95),
+    # grizzly abundance
+    griz_logN = griz_init_logN,
+    # grizzly observation error
+    griz_sigma_obs = 0.1,
+    griz_sigma_obs = 0.1,
+    # grizzly process error
+    griz_sigma_proc = 0.05,
+    # grizzly betas
+    beta1_griz_elkCalves = 0,
+    # elk survival covariates
     beta0_calfSurv = qlogis(0.22),
     beta1_calfSurv_wolfN = 0,
     beta2_calfSurv_wintPPT = 0,
@@ -634,12 +775,14 @@ make_icm_inits <- function() {
     beta2_oaSurv_wintPPT = 0,
     beta3_oaSurv_grizN = 0,
     beta4_oaSurv_elkN = 0,
+    # process error on elk survival regressions
     sigma_calf = 0.1,
     sigma_ya = 0.1,
     sigma_oa = 0.1,
     eps_elk_s_c = c(0, rep(0, n_years - 1)),
     eps_elk_s_ya = c(0, rep(0, n_years - 1)),
     eps_elk_s_oa = c(0, rep(0, n_years - 1)),
+    # wolf survival covariates
     beta0_wpupSurv = qlogis(0.50),
     beta1_wpupSurv_elkN = 0,
     beta2_wpupSurv_bisonN = 0,
@@ -648,31 +791,38 @@ make_icm_inits <- function() {
     beta1_wadSurv_elkN = 0,
     beta2_wadSurv_bisonN = 0,
     beta3_wadSurv_wolfN = 0,
+    # process error on wolf survival regressions
     sigma_wpup = 0.1,
     sigma_wad = 0.1,
     eps_wolf_s_p = c(0, rep(0, n_years - 1)),
-    eps_wolf_s_a = c(0, rep(0, n_years - 1)),
-    logit_wolf_s_p = c(qlogis(0.5), rep(NA, n_years - 1)),
-    logit_wolf_s_a = c(qlogis(0.9), rep(NA, n_years - 1)),
-    logit_elk_s_c = c(qlogis(0.22), rep(NA, n_years - 1)),
-    logit_elk_s_ya = c(qlogis(0.90), rep(NA, n_years - 1)),
-    logit_elk_s_oa = c(qlogis(0.80), rep(NA, n_years - 1))
+    eps_wolf_s_a = c(0, rep(0, n_years - 1))
   )
 }
 
 # params to monitor
 icm_params <- c(
+  # elk demography
   "elk_s_c", "elk_s_ya", "elk_s_oa", "elk_p_13",
   "elk_f_ya", "elk_f_oa", "elk_p_det",
+  # elk abundances
   "elk_N_1y", "elk_N_ya", "elk_N_oa", "elk_N_female",
+  # wolf demography
   "wolf_s_p", "wolf_s_a", "wolf_f", "wolf_p_det",
+  # wolf abundances
   "wolf_N_p_sum", "wolf_N_p", "wolf_N_a", "wolf_N_tot",
+  # grizzly abundances and vars for state-space model
+  "griz_N", "griz_logN", "griz_sigma_obs", "griz_sigma_proc", "beta1_griz_elkCalves",
+  "griz_mu", "elk_calves_born", "elk_calves_born_std", "griz_N_std",
+  # elk survival regression covariates
   "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_wintPPT", "beta3_calfSurv_grizN", "beta4_calfSurv_elkN",
   "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", "beta4_yaSurv_elkN",
   "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", "beta4_oaSurv_elkN",
+  # elk errors
   "sigma_calf", "sigma_ya", "sigma_oa", "eps_elk_s_c", "eps_elk_s_ya", "eps_elk_s_oa",
+  # wolf survival regression covariates
   "beta0_wpupSurv", "beta1_wpupSurv_elkN", "beta2_wpupSurv_bisonN", "beta3_wpupSurv_wolfN",
   "beta0_wadSurv", "beta1_wadSurv_elkN", "beta2_wadSurv_bisonN", "beta3_wadSurv_wolfN",
+  # wolf errors
   "sigma_wpup", "sigma_wad", "eps_wolf_s_p", "eps_wolf_s_a"
 )
 
