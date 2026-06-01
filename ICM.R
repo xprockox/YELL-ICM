@@ -728,70 +728,84 @@ griz_init_logN <- log(pmax(1, ifelse(
 )))
 
 make_icm_inits <- function() {
+  
+  griz_init_logN <- log(pmax(1, ifelse(
+    is.na(grizzly$griz_N),
+    mean(grizzly$griz_N, na.rm = TRUE),
+    grizzly$griz_N
+  )))
+  
   list(
     # elk demography
     elk_p_13 = rep(0.15, n_years),
     elk_f_ya = rep(0.76, n_years - 1),
     elk_f_oa = rep(0.64, n_years - 1),
+    
     # elk observation error
     elk_sigma_obs_female = 0.30,
     elk_p_det = runif(n_years, 0.6, 0.95),
+    
     # elk abundances
     elk_N_1y = elk_init_N1y,
     elk_N_ya = elk_init_Nya,
     elk_N_oa = elk_init_Noa,
+    
     # wolf demography
     wolf_f = rep(1.0, n_years - 1),
+    
     # wolf observation error
     wolf_sigma_obs = 0.2,
     wolf_p_det = runif(n_years, 0.6, 0.95),
+    
     # wolf abundances
     wolf_N_p_sum = pmax(1, round(wolf_summer_pups)),
     wolf_N_p = wolf_init_Np,
     wolf_N_p_bio = wolf_init_Np_bio,
     wolf_N_a = wolf_init_Na,
+    
     # grizzly abundance
     griz_logN = griz_init_logN,
-    # grizzly observation error
-    griz_sigma_obs = 0.1,
-    griz_sigma_obs = 0.1,
-    # grizzly process error
-    griz_sigma_proc = 0.05,
-    # grizzly betas
+    griz_sigma_obs = 0.2,
+    griz_sigma_proc = 0.1,
     beta1_griz_elkCalves = 0,
+    
     # elk survival covariates
     beta0_calfSurv = qlogis(0.22),
     beta1_calfSurv_wolfN = 0,
     beta2_calfSurv_wintPPT = 0,
     beta3_calfSurv_grizN = 0,
     beta4_calfSurv_elkN = 0,
+    
     beta0_yaSurv = qlogis(0.90),
     beta1_yaSurv_wolfN = 0,
     beta2_yaSurv_wintPPT = 0,
     beta3_yaSurv_grizN = 0,
     beta4_yaSurv_elkN = 0,
+    
     beta0_oaSurv = qlogis(0.80),
     beta1_oaSurv_wolfN = 0,
     beta2_oaSurv_wintPPT = 0,
     beta3_oaSurv_grizN = 0,
     beta4_oaSurv_elkN = 0,
-    # process error on elk survival regressions
+    
     sigma_calf = 0.1,
     sigma_ya = 0.1,
     sigma_oa = 0.1,
     eps_elk_s_c = c(0, rep(0, n_years - 1)),
     eps_elk_s_ya = c(0, rep(0, n_years - 1)),
     eps_elk_s_oa = c(0, rep(0, n_years - 1)),
+    
     # wolf survival covariates
     beta0_wpupSurv = qlogis(0.50),
     beta1_wpupSurv_elkN = 0,
     beta2_wpupSurv_bisonN = 0,
     beta3_wpupSurv_wolfN = 0,
+    
     beta0_wadSurv = qlogis(0.90),
     beta1_wadSurv_elkN = 0,
     beta2_wadSurv_bisonN = 0,
     beta3_wadSurv_wolfN = 0,
-    # process error on wolf survival regressions
+    
     sigma_wpup = 0.1,
     sigma_wad = 0.1,
     eps_wolf_s_p = c(0, rep(0, n_years - 1)),
@@ -907,7 +921,8 @@ clusterExport(
     "wolf_summer_pups",
     "wolf_init_Np",
     "wolf_init_Np_bio",
-    "wolf_init_Na"
+    "wolf_init_Na",
+    "grizzly"
   ),
   envir = environment()
 )
