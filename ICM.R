@@ -436,9 +436,8 @@ icm_code <- nimbleCode({
   
   ########## GRIZZLY SUBMODEL ##########
   
-  # latent grizzly abundance the first year as a logNormal variable with mean = first year's obs
-  griz_logN[1] ~ dnorm(log(griz_obs[1] + 1e-6), 1 / 0.5^2)
-  
+  # latent grizzly abundance the first year 
+  griz_logN[1] ~ dnorm(griz_logN_init_mean, 1 / 0.5^2)  
   #
   ##
   ###
@@ -631,7 +630,8 @@ icm_constants <- list(
   elk_N_female_sd = sd(elk_dat_n$n_female, na.rm = TRUE),
   # grizzlies
   griz_N_mean = mean(grizzly$griz_N, na.rm = TRUE),
-  griz_N_sd = sd(grizzly$griz_N, na.rm = TRUE)
+  griz_N_sd = sd(grizzly$griz_N, na.rm = TRUE),
+  griz_logN_init_mean = log(pmax(1, grizzly$griz_N[which(!is.na(grizzly$griz_N))[1]]))
 )
 
 # data
