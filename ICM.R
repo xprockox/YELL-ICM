@@ -964,6 +964,7 @@ save(
   community_years,
   elk_dat_n,
   wolf_pop,
+  grizzly,
   covars,
   icm_constants,
   run_time,

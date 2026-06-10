@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Results exploration
-### Last updated: May 28, 2026
+### Last updated: June 2, 2026
 ### xprockox@gmail.com
 
 ################################################################################
@@ -19,7 +19,7 @@ library(stringr)
 ################################################################################
 
 # load model results
-load("data/outputs/ICM_parallel_output_2026-05-26.RData")
+load("data/outputs/ICM_parallel_output_2026-06-01.RData")
 
 # import elk data
 elk_dat_n <- read.csv("data/elk_abundanceEstimates_stages.csv")
@@ -109,7 +109,9 @@ pretty_coef_labels <- c(
   beta0_wadSurv = "Wolf adult survival intercept",
   beta1_wadSurv_elkN = "Wolf adult survival elk effect",
   beta2_wadSurv_bisonN = "Wolf adult survival bison effect",
-  beta3_wadSurv_wolfN = "Wolf adult survival density dependence effect"
+  beta3_wadSurv_wolfN = "Wolf adult survival density dependence effect",
+  # new griz var (2026-06-01)
+  beta1_griz_elkCalves = "Grizzly elk calves effect"
 )
 
 ################################################################################
@@ -331,6 +333,13 @@ wolf_N_summ <- extract_abundance_summary(
   stage_map = wolf_stage_map
 )
 
+griz_N_summ <- extract_abundance_summary(
+  icm_clean,
+  params = "griz_N",
+  years = community_years,
+  stage_map = c(griz_N = "Grizzly abundance")
+)
+
 elk_vrates2 <- extract_indexed_summary(
   icm_clean,
   params = c("elk_s_c", "elk_s_ya", "elk_s_oa", "elk_p_13", "elk_f_ya", "elk_f_oa"),
@@ -345,6 +354,19 @@ wolf_vrates2 <- extract_indexed_summary(
   years = community_years,
   label_map = wolf_vrate_map,
   fecundity_params = c("Fecundity (f)")
+)
+
+griz_mu_summ <- extract_indexed_summary(
+  icm_clean,
+  params = "griz_mu",
+  years = community_years
+) %>%
+  filter(year %in% community_years[-1])
+
+griz_logN_summ <- extract_indexed_summary(
+  icm_clean,
+  params = "griz_logN",
+  years = community_years
 )
 
 elk_N_rhat <- get_rhat_issues(MCMCsummary(
@@ -367,6 +389,11 @@ wolf_vrate_rhat <- get_rhat_issues(MCMCsummary(
   params = c("wolf_s_p", "wolf_s_a", "wolf_f")
 ))
 
+griz_coef_rhat <- get_rhat_issues(MCMCsummary(
+  icm_clean,
+  params = "beta1_griz_elkCalves"
+))
+
 reg_coef_rhat <- get_rhat_issues(MCMCsummary(
   icm_clean,
   params = c(
@@ -377,6 +404,13 @@ reg_coef_rhat <- get_rhat_issues(MCMCsummary(
     "beta0_wadSurv", "beta1_wadSurv_elkN", "beta2_wadSurv_bisonN", "beta3_wadSurv_wolfN"
   )
 ))
+
+elk_N_rhat
+elk_vrate_rhat
+wolf_N_rhat
+wolf_vrate_rhat
+griz_coef_rhat
+reg_coef_rhat
 
 ################################################################################
 ##########----------------- Validation / time series -----------------##########
@@ -404,6 +438,14 @@ wolf_obs_long <- make_observed_long(
   )
 )
 
+griz_obs_long <- make_observed_long(
+  grizzly,
+  year_col = "year",
+  cols_map = c(
+    griz_N = "Grizzly abundance"
+  )
+)
+
 elk_validation_plot <- plot_validation(
   elk_N_summ,
   elk_obs_long,
@@ -415,6 +457,12 @@ wolf_validation_plot <- plot_validation(
   wolf_N_summ,
   wolf_obs_long,
   title = "Wolf posterior population estimates with validation data"
+)
+
+griz_validation_plot <- plot_validation(
+  griz_N_summ,
+  griz_obs_long,
+  title = "Grizzly posterior abundance estimates with observed data"
 )
 
 elk_vrate_plot <- plot_vital_rates(
@@ -430,8 +478,6 @@ wolf_vrate_plot <- plot_vital_rates(
 ################################################################################
 ##########----------------- Plotting data builders -----------------############
 ################################################################################
-
-regression_years <- setdiff(community_years, 1995:1997)
 
 elk_surv_pts <- bind_rows(
   elk_vrates2 %>%
@@ -454,31 +500,47 @@ wolf_surv_pts <- bind_rows(
     transmute(year, wolf_surv = mean, wolf_low = low, wolf_high = high, stage = "Adult survival")
 )
 
-wolf_pts <- summarize_indexed_draws(post_mat, "wolf_N_tot", community_years, "wolf_N_tot") %>%
+wolf_pts_elk <- summarize_indexed_draws(post_mat, "wolf_N_tot", community_years, "wolf_N_tot") %>%
   filter(year %in% regression_years) %>%
   rename(wolf_low = low, wolf_high = high)
+
+wolf_pts_wolf <- summarize_indexed_draws(post_mat, "wolf_N_tot", community_years, "wolf_N_tot") %>%
+  filter(year %in% regression_years) %>%
+  rename(wolfN_low = low, wolfN_high = high)
 
 elk_abund_pts <- summarize_indexed_draws(post_mat, "elk_N_female", community_years, "elk_N_female") %>%
   filter(year %in% regression_years) %>%
   rename(elk_low_x = low, elk_high_x = high)
 
-wolf_abund_pts <- summarize_indexed_draws(post_mat, "wolf_N_tot", community_years, "wolf_N_tot") %>%
+griz_pts <- summarize_indexed_draws(post_mat, "griz_N", community_years, "griz_N") %>%
   filter(year %in% regression_years) %>%
-  rename(wolfN_low = low, wolfN_high = high)
+  rename(griz_low = low, griz_high = high)
 
 plot_df_elk <- elk_surv_pts %>%
-  left_join(wolf_pts, by = "year") %>%
+  left_join(wolf_pts_elk, by = "year") %>%
   left_join(elk_abund_pts, by = "year") %>%
-  left_join(covars %>% select(year, winter_ppt_mm, griz_N), by = "year")
+  left_join(
+    covars %>%
+      filter(year %in% regression_years) %>%
+      select(year, winter_ppt_mm),
+    by = "year"
+  ) %>%
+  left_join(griz_pts, by = "year")
 
 wolf_plot_df <- wolf_surv_pts %>%
   left_join(
     summarize_indexed_draws(post_mat, "elk_N_female", community_years, "elk_N_female") %>%
+      filter(year %in% regression_years) %>%
       rename(elk_low = low, elk_high = high),
     by = "year"
   ) %>%
-  left_join(wolf_abund_pts, by = "year") %>%
-  left_join(covars %>% select(year, NR_Bison), by = "year")
+  left_join(wolf_pts_wolf, by = "year") %>%
+  left_join(
+    covars %>%
+      filter(year %in% regression_years) %>%
+      select(year, NR_Bison),
+    by = "year"
+  )
 
 ################################################################################
 ##########-------------- Dynamic regression plot system ---------------#########
@@ -554,11 +616,11 @@ predictor_specs <- list(
   ),
   griz_N = list(
     raw_col = "griz_N",
-    raw_df = covars %>% filter(year %in% regression_years),
-    std_fun = function(x) (x - mean(covars$griz_N, na.rm = TRUE)) / sd(covars$griz_N, na.rm = TRUE),
+    raw_df = griz_pts,
+    std_fun = function(x) (x - icm_constants$griz_N_mean) / icm_constants$griz_N_sd,
     held_value = 0,
-    xmin = NULL,
-    xmax = NULL,
+    xmin = "griz_low",
+    xmax = "griz_high",
     label = "Grizzly abundance"
   ),
   elk_N_female = list(
@@ -898,6 +960,17 @@ wolf_coef_plot <- make_coef_density_plot_grouped(
   model_order = c("Wolf pup survival", "Wolf adult survival")
 )
 
+griz_coef_plot <- tibble(value = post_mat[, "beta1_griz_elkCalves"]) %>%
+  ggplot(aes(x = value)) +
+  geom_density(fill = "#4B7F52", alpha = 0.45) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  theme_bw() +
+  labs(
+    x = "Posterior value",
+    y = "Density",
+    title = "Posterior distribution of elk calves effect on grizzly abundance"
+  )
+
 ################################################################################
 #########----------------- Evidence classification ----------------#############
 ################################################################################
@@ -947,6 +1020,12 @@ strong_effects <- coef_evidence %>% filter(evidence == "Strong")
 moderate_effects <- coef_evidence %>% filter(evidence == "Moderate")
 weak_effects <- coef_evidence %>% filter(evidence == "Weak")
 little_effects <- coef_evidence %>% filter(evidence == "Little/none")
+
+griz_coef_evidence <- classify_evidence(post_mat[, "beta1_griz_elkCalves"]) %>%
+  mutate(
+    parameter = "beta1_griz_elkCalves",
+    label = "Grizzly elk calves effect"
+  )
 
 ################################################################################
 ##########----------------- Elasticity analysis -----------------###############
@@ -1055,6 +1134,7 @@ elasticity_combo <- plot_grid(
 # abundance validation and vital rates
 elk_validation_plot
 wolf_validation_plot
+griz_validation_plot
 elk_vrate_plot
 wolf_vrate_plot
 
@@ -1070,6 +1150,9 @@ wolf_main_plot
 bison_plot_wolf
 wolfN_plot_wolf
 wolf_coef_plot
+
+# grizzlies
+griz_coef_plot
 
 # elasticity
 lambda_plot
@@ -1322,4 +1405,25 @@ cat(
     collapse = "\n"
   ),
   "\n"
+)
+
+cat(
+  " --------------------------------------------------------\n",
+  "GRIZZLY PROCESS COEFFICIENT SUMMARY\n",
+  "--------------------------------------------------------\n\n",
+  paste0(
+    "Grizzly elk calves effect: median = ",
+    round(griz_coef_evidence$median, 3),
+    ", 95% CI [",
+    round(griz_coef_evidence$ci95_low, 3), ", ",
+    round(griz_coef_evidence$ci95_high, 3), "]",
+    ", 80% CI [",
+    round(griz_coef_evidence$ci80_low, 3), ", ",
+    round(griz_coef_evidence$ci80_high, 3), "]",
+    ", direction = ",
+    griz_coef_evidence$direction,
+    ", evidence = ",
+    griz_coef_evidence$evidence,
+    "\n"
+  )
 )
