@@ -15,7 +15,7 @@ library(popbio)
 library(parallel)
 
 wolf_range <- "full" # can be "NR" or "full"
-grizzly_range <- "park" # can be "NR" or "park" or "full"
+grizzly_range <- "elk_mcp" # can be "NR", "park", "elk_mcp", or "full"
 drop_regression_years <- 1995:1997
 
 ################################################################################
@@ -229,28 +229,35 @@ bison <- read.csv("data/covariates/NR_Bison_Abundance.csv") %>%
   rename(year = Year)
 
 # import grizzly data using conditional logic
-if (grizzly_range %in% c("NR", "park")) {
+if (grizzly_range %in% c("NR", "park", "elk_mcp")) {
+  
   grizzly <- read.csv("data/covariates/annual_grizzly_estimates_by_polygon.csv")
   
-  polygon_keep <- if (grizzly_range == "NR") {
-    "Northern Range"
-  } else {
-    "Yellowstone National Park"
-  }
+  polygon_keep <- switch(
+    grizzly_range,
+    NR = "Northern Range",
+    park = "Yellowstone National Park",
+    elk_mcp = "Elk GPS MCP"
+  )
   
   grizzly <- grizzly %>%
     filter(polygon_name == polygon_keep) %>%
     rename(griz_N = estimated_grizzlies) %>%
     select(year, griz_N)
+  
 } else if (grizzly_range == "full") {
+  
   grizzly <- read.csv("data/covariates/IGBST_abundances_1995-2024.csv") %>%
     rename(
       griz_N = Mean,
       year = Year
     ) %>%
     select(year, griz_N)
+  
 } else {
-  stop("grizzly_range must be 'NR', 'park', or 'full'")
+  
+  stop("grizzly_range must be 'NR', 'park', 'elk_mcp', or 'full'")
+  
 }
 
 # grizzly data only goes to 2020, so we need to add some NAs at the end to have the model estimate years after
