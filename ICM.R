@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Combines elk IPM + wolf IPM in one NIMBLE model
-### Last updated: June 1, 2026
+### Last updated: June 15, 2026
 
 ################################################################################
 ############################ Packages and settings #############################
@@ -224,9 +224,20 @@ wolf_a <- extract_marray_inputs(wolf_y, wolf_is_class2, "adult")
 # import prism data
 annual_prism <- read.csv("data/covariates/prism_annual_precip_tmean.csv")
 
-# import bison data
-bison <- read.csv("data/covariates/NR_Bison_Abundance.csv") %>%
-  rename(year = Year)
+# import bison cull data
+bison <- read.csv("data/covariates/yellowstone_bison_culls_harvests_1970_2023.csv") %>%
+  select(Year, Max_Bison_North, Total_Culls_Harvests) %>%
+  rename(
+    year = Year,
+    NR_Bison = Max_Bison_North,
+    total_cull_harvest = Total_Culls_Harvests
+  ) %>%
+  mutate(year = year + 1,
+         total_cull_harvest = readr::parse_number(total_cull_harvest),
+         NR_Bison = readr::parse_number(NR_Bison))
+
+bison <- tibble(year = community_years) %>%
+  left_join(bison, by = "year")
 
 # import grizzly data using conditional logic
 if (grizzly_range %in% c("NR", "park", "elk_mcp")) {
@@ -264,10 +275,20 @@ if (grizzly_range %in% c("NR", "park", "elk_mcp")) {
 grizzly <- tibble(year = community_years) %>%
   left_join(grizzly, by = "year")
 
+# import annual elk harvest
+elk_harvest <- read.csv("data/covariates/annual_elk_harvest.csv") %>%
+  rename(
+    elk_harvest = total_female_harvested
+  )
+
+elk_harvest <- tibble(year = community_years) %>%
+  left_join(elk_harvest, by = "year")
+
 # combine all covars into same df
 covars <- annual_prism %>%
   left_join(bison, by = "year") %>%
   left_join(grizzly, by = "year") %>%
+  left_join(elk_harvest, by = "year") %>%
   filter(year %in% community_years) %>%
   arrange(match(year, community_years))
 
@@ -504,7 +525,52 @@ icm_code <- nimbleCode({
   beta1_griz_elkCalves ~ dnorm(0, 1 / 1^2)
   # beta2_griz_x2 ~ dnorm(0, 1 / 0.3^2)
   # beta3_griz_x3 ~ dnorm(0, 1 / 0.3^2)
-
+  
+  ########## BISON SUBMODEL ##########
+  
+  # latent bison abundance the first year 
+  bison_logN[1] ~ dnorm(bison_logN_init_mean, 1 / 0.5^2)  
+  
+  # state-space 
+  for (t in 2:n_years) {
+    
+    # for now, expected abundance in year t depends on abundance in year t - 1 + some effect of bison harvest/cull
+    bison_mu[t] <-
+      bison_logN[t - 1] +
+      beta1_bison_cull * log(bison_culled[t - 1] + 1e-6)# + 
+    #   beta2_bison_x2 * bison_x2_std[t - 1] +
+    #   beta3_bison_x3 * bison_x3_std[t - 1] # leaving these to make it easier to add more covariates as needed
+    
+    bison_logN[t] ~ dnorm(bison_mu[t], bison_tau_proc)
+  }
+  
+  # convert latent abundance back to natural scale
+  for (t in 1:n_years) {
+    bison_N[t] <- exp(bison_logN[t])
+  }
+  
+  # observation error prior
+  bison_sigma_obs ~ dunif(0.05, 2)
+  bison_tau_obs <- 1 / (bison_sigma_obs^2)
+  
+  for (t in 1:n_years) {
+    bison_obs[t] ~ dlnorm(bison_logN[t], bison_tau_obs)
+  }
+  
+  # process error prior
+  bison_sigma_proc ~ dunif(0.01, 1)
+  bison_tau_proc <- 1 / (bison_sigma_proc^2)
+  
+  # standardize bison abundance for use in wolf regressions
+  for (t in 1:n_years) {
+    bison_N_std[t] <- (bison_N[t] - bison_N_mean) / bison_N_sd
+  }
+  
+  # priors for bison process covariates (uncomment as added)
+  beta1_bison_cull ~ dnorm(0, 1 / 1^2)
+  # beta2_bison_x2 ~ dnorm(0, 1 / 0.3^2)
+  # beta3_bison_x3 ~ dnorm(0, 1 / 0.3^2)
+  
   ########## ELK AND WOLF SURVIVAL REGRESSIONS ##########
   
   # elk regression priors
@@ -512,19 +578,22 @@ icm_code <- nimbleCode({
   beta1_calfSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_calfSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
   beta3_calfSurv_grizN ~ dnorm(0, 1 / 0.3^2)
-  beta4_calfSurv_elkN ~ dnorm(0, 1 / 0.3^2)
-  
+  beta4_calfSurv_harvest ~ dnorm(0, 1 / 0.3^2)
+  beta5_calfSurv_elkN ~ dnorm(0, 1 / 0.3^2)  
+
   beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2)
   beta1_yaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_yaSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
   beta3_yaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
-  beta4_yaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
+  beta4_yaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
+  beta5_yaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   
   beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2)
   beta1_oaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_oaSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
   beta3_oaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
-  beta4_oaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
+  beta4_oaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
+  beta5_oaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   
   sigma_calf ~ dunif(0, 0.5)
   sigma_ya ~ dunif(0, 0.3)
@@ -585,7 +654,8 @@ icm_code <- nimbleCode({
       beta1_calfSurv_wolfN * wolf_N_tot_std[t - 1] +
       beta2_calfSurv_wintPPT * wintPPT[t] +
       beta3_calfSurv_grizN * griz_N_std[t - 1] +
-      beta4_calfSurv_elkN * elk_N_female_std[t - 1] +
+      beta4_calfSurv_harvest * elkHarvest[t] +
+      beta5_calfSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_c[t]
     
     logit(elk_s_ya[t]) <-
@@ -593,7 +663,8 @@ icm_code <- nimbleCode({
       beta1_yaSurv_wolfN * wolf_N_tot_std[t - 1] +
       beta2_yaSurv_wintPPT * wintPPT[t] +
       beta3_yaSurv_grizN * griz_N_std[t - 1] +
-      beta4_yaSurv_elkN * elk_N_female_std[t - 1] +
+      beta4_yaSurv_harvest * elkHarvest[t] +
+      beta5_yaSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_ya[t]
     
     logit(elk_s_oa[t]) <-
@@ -601,20 +672,21 @@ icm_code <- nimbleCode({
       beta1_oaSurv_wolfN * wolf_N_tot_std[t - 1] +
       beta2_oaSurv_wintPPT * wintPPT[t] +
       beta3_oaSurv_grizN * griz_N_std[t - 1] +
-      beta4_oaSurv_elkN * elk_N_female_std[t - 1] +
+      beta4_oaSurv_harvest * elkHarvest[t] +
+      beta5_oaSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_oa[t]
     
     logit(wolf_s_p[t]) <-
       beta0_wpupSurv +
       beta1_wpupSurv_elkN * elk_N_female_std[t - 1] +
-      beta2_wpupSurv_bisonN * bisonN_std[t - 1] +
+      beta2_wpupSurv_bisonN * bison_N_std[t - 1] +
       beta3_wpupSurv_wolfN * wolf_N_tot_std[t - 1] +
       eps_wolf_s_p[t]
     
     logit(wolf_s_a[t]) <-
       beta0_wadSurv +
       beta1_wadSurv_elkN * elk_N_female_std[t - 1] +
-      beta2_wadSurv_bisonN * bisonN_std[t - 1] +
+      beta2_wadSurv_bisonN * bison_N_std[t - 1] +
       beta3_wadSurv_wolfN * wolf_N_tot_std[t - 1] +
       eps_wolf_s_a[t]
   }
@@ -638,7 +710,12 @@ icm_constants <- list(
   # grizzlies
   griz_N_mean = mean(grizzly$griz_N, na.rm = TRUE),
   griz_N_sd = sd(grizzly$griz_N, na.rm = TRUE),
-  griz_logN_init_mean = log(pmax(1, grizzly$griz_N[which(!is.na(grizzly$griz_N))[1]]))
+  griz_logN_init_mean = log(pmax(1, grizzly$griz_N[which(!is.na(grizzly$griz_N))[1]])),
+  # bison
+  bison_N_mean = mean(bison$NR_Bison, na.rm = TRUE),
+  bison_N_sd = sd(bison$NR_Bison, na.rm = TRUE),
+  bison_logN_init_mean = log(bison$NR_Bison[which(!is.na(bison$NR_Bison))[1]]),
+  bison_culled = bison$total_cull_harvest
 )
 
 # data
@@ -668,8 +745,9 @@ icm_data <- list(
   wolf_rel_a = wolf_a$releases,
   # covars
   wintPPT = covars_std$winter_ppt_mm,
-  bisonN_std = covars_std$NR_Bison,
-  griz_obs = grizzly$griz_N
+  bison_obs = bison$NR_Bison,
+  griz_obs = grizzly$griz_N,
+  elkHarvest = covars_std$elk_harvest
 )
 
 # initial values
@@ -720,6 +798,12 @@ griz_init_logN <- log(pmax(1, ifelse(
 
 make_icm_inits <- function() {
   
+  bison_init_logN <- log(pmax(1, ifelse(
+    is.na(bison$NR_Bison),
+    mean(bison$NR_Bison, na.rm = TRUE),
+    bison$NR_Bison
+  )))
+  
   griz_init_logN <- log(pmax(1, ifelse(
     is.na(grizzly$griz_N),
     mean(grizzly$griz_N, na.rm = TRUE),
@@ -760,24 +844,33 @@ make_icm_inits <- function() {
     griz_sigma_proc = 0.1,
     beta1_griz_elkCalves = 0,
     
+    # bison abundances and culls
+    bison_logN = bison_init_logN,
+    bison_sigma_obs = 0.2,
+    bison_sigma_proc = 0.1,
+    beta1_bison_cull = 0,
+    
     # elk survival covariates
     beta0_calfSurv = qlogis(0.22),
     beta1_calfSurv_wolfN = 0,
     beta2_calfSurv_wintPPT = 0,
     beta3_calfSurv_grizN = 0,
-    beta4_calfSurv_elkN = 0,
+    beta4_calfSurv_harvest = 0,
+    beta5_calfSurv_elkN = 0,
     
     beta0_yaSurv = qlogis(0.90),
     beta1_yaSurv_wolfN = 0,
     beta2_yaSurv_wintPPT = 0,
     beta3_yaSurv_grizN = 0,
-    beta4_yaSurv_elkN = 0,
+    beta4_yaSurv_harvest = 0,
+    beta5_yaSurv_elkN = 0,
     
     beta0_oaSurv = qlogis(0.80),
     beta1_oaSurv_wolfN = 0,
     beta2_oaSurv_wintPPT = 0,
     beta3_oaSurv_grizN = 0,
-    beta4_oaSurv_elkN = 0,
+    beta4_oaSurv_harvest = 0,
+    beta5_oaSurv_elkN = 0,
     
     sigma_calf = 0.1,
     sigma_ya = 0.1,
@@ -818,10 +911,14 @@ icm_params <- c(
   # grizzly abundances and vars for state-space model
   "griz_N", "griz_logN", "griz_sigma_obs", "griz_sigma_proc", "beta1_griz_elkCalves",
   "griz_mu", "elk_calves_born", "griz_N_std",
+  # bison abundances and vars for state-space model
+  "bison_N", "bison_logN", "bison_mu",
+  "bison_sigma_obs", "bison_sigma_proc",
+  "beta1_bison_cull",
   # elk survival regression covariates
-  "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_wintPPT", "beta3_calfSurv_grizN", "beta4_calfSurv_elkN",
-  "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", "beta4_yaSurv_elkN",
-  "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", "beta4_oaSurv_elkN",
+  "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_wintPPT", "beta3_calfSurv_grizN", "beta4_calfSurv_harvest", "beta5_calfSurv_elkN",
+  "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", "beta4_yaSurv_harvest", "beta5_yaSurv_elkN",
+  "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", "beta4_oaSurv_harvest", "beta5_oaSurv_elkN",
   # elk errors
   "sigma_calf", "sigma_ya", "sigma_oa", "eps_elk_s_c", "eps_elk_s_ya", "eps_elk_s_oa",
   # wolf survival regression covariates
@@ -874,9 +971,9 @@ run_one_chain <- function(chain_id,
 # MCMC settings
 set.seed(17)
 nc <- 3
-ni <- 200000
-nb <- 40000
-th <- 4
+ni <- 10
+nb <- 2
+th <- 2
 
 # stamp start time to calculate total runtime after run
 start_time <- Sys.time()
@@ -913,7 +1010,8 @@ clusterExport(
     "wolf_init_Np",
     "wolf_init_Np_bio",
     "wolf_init_Na",
-    "grizzly"
+    "grizzly",
+    "bison"
   ),
   envir = environment()
 )
@@ -972,11 +1070,13 @@ save(
   elk_dat_n,
   wolf_pop,
   grizzly,
+  bison,
+  bison_cull,
   covars,
   icm_constants,
   run_time,
   drop_regression_years,
-  file = "data/outputs/ICM_parallel_output_2026-06-01.RData"
+  file = "data/outputs/ICM_parallel_output_2026-06-15.RData"
 )
 ################################################################################
 ################################################################################
