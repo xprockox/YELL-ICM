@@ -971,9 +971,9 @@ run_one_chain <- function(chain_id,
 # MCMC settings
 set.seed(17)
 nc <- 3
-ni <- 10
-nb <- 2
-th <- 2
+ni <- 200000
+nb <- 40000
+th <- 4
 
 # stamp start time to calculate total runtime after run
 start_time <- Sys.time()
@@ -1071,7 +1071,6 @@ save(
   wolf_pop,
   grizzly,
   bison,
-  bison_cull,
   covars,
   icm_constants,
   run_time,
