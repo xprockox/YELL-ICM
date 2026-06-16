@@ -589,14 +589,14 @@ icm_code <- nimbleCode({
   beta1_yaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_yaSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
   beta3_yaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
-  #beta4_yaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
+  beta4_yaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   beta5_yaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   
   beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2)
   beta1_oaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_oaSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
   beta3_oaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
-  #beta4_oaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
+  beta4_oaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   beta5_oaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   
   sigma_calf ~ dunif(0, 0.5)
@@ -658,7 +658,7 @@ icm_code <- nimbleCode({
       beta1_calfSurv_wolfN * wolf_N_tot_std[t - 1] +
       beta2_calfSurv_wintPPT * wintPPT[t] +
       beta3_calfSurv_grizN * griz_N_std[t - 1] +
-      #beta4_calfSurv_harvest * elkHarvest[t] +
+      #beta4_calfSurv_harvest * elk_1y_Harvest[t] +
       beta5_calfSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_c[t]
     
@@ -667,7 +667,7 @@ icm_code <- nimbleCode({
       beta1_yaSurv_wolfN * wolf_N_tot_std[t - 1] +
       beta2_yaSurv_wintPPT * wintPPT[t] +
       beta3_yaSurv_grizN * griz_N_std[t - 1] +
-      #beta4_yaSurv_harvest * elkHarvest[t] +
+      beta4_yaSurv_harvest * elk_ya_Harvest[t] +
       beta5_yaSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_ya[t]
     
@@ -676,7 +676,7 @@ icm_code <- nimbleCode({
       beta1_oaSurv_wolfN * wolf_N_tot_std[t - 1] +
       beta2_oaSurv_wintPPT * wintPPT[t] +
       beta3_oaSurv_grizN * griz_N_std[t - 1] +
-      #beta4_oaSurv_harvest * elkHarvest[t] +
+      beta4_oaSurv_harvest * elk_oa_Harvest[t] +
       beta5_oaSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_oa[t]
     
@@ -750,8 +750,9 @@ icm_data <- list(
   # covars
   wintPPT = covars_std$winter_ppt_mm,
   bison_obs = bison$NR_Bison,
-  griz_obs = grizzly$griz_N#,
-  #elkHarvest = covars_std$elk_harvest
+  griz_obs = grizzly$griz_N,
+  elk_ya_Harvest = covars_std$age_2_13,
+  elk_oa_Harvest = covars_std$age_14_plus
 )
 
 # initial values
@@ -866,14 +867,14 @@ make_icm_inits <- function() {
     beta1_yaSurv_wolfN = 0,
     beta2_yaSurv_wintPPT = 0,
     beta3_yaSurv_grizN = 0,
-    #beta4_yaSurv_harvest = 0,
+    beta4_yaSurv_harvest = 0,
     beta5_yaSurv_elkN = 0,
     
     beta0_oaSurv = qlogis(0.80),
     beta1_oaSurv_wolfN = 0,
     beta2_oaSurv_wintPPT = 0,
     beta3_oaSurv_grizN = 0,
-    #beta4_oaSurv_harvest = 0,
+    beta4_oaSurv_harvest = 0,
     beta5_oaSurv_elkN = 0,
     
     sigma_calf = 0.1,
@@ -922,9 +923,9 @@ icm_params <- c(
   # elk survival regression covariates
   "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_wintPPT", "beta3_calfSurv_grizN",# "beta4_calfSurv_harvest", 
   "beta5_calfSurv_elkN",
-  "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN",# "beta4_yaSurv_harvest", 
+  "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", "beta4_yaSurv_harvest", 
   "beta5_yaSurv_elkN",
-  "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", #"beta4_oaSurv_harvest", 
+  "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", "beta4_oaSurv_harvest", 
   "beta5_oaSurv_elkN",
   # elk errors
   "sigma_calf", "sigma_ya", "sigma_oa", "eps_elk_s_c", "eps_elk_s_ya", "eps_elk_s_oa",
