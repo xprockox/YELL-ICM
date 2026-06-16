@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Results exploration
-### Last updated: June 2, 2026
+### Last updated: June 16, 2026
 ### xprockox@gmail.com
 
 ################################################################################
@@ -19,7 +19,7 @@ library(stringr)
 ################################################################################
 
 # load model results
-load("data/outputs/ICM_parallel_output_2026-06-01.RData")
+load("data/outputs/ICM_parallel_output_2026-06-15.RData")
 
 # import elk data
 elk_dat_n <- read.csv("data/elk_abundanceEstimates_stages.csv")
@@ -91,26 +91,33 @@ pretty_coef_labels <- c(
   beta1_calfSurv_wolfN = "Calf survival wolf effect",
   beta2_calfSurv_wintPPT = "Calf survival winter precipitation effect",
   beta3_calfSurv_grizN = "Calf survival grizzly effect",
-  beta4_calfSurv_elkN = "Calf survival density dependence effect",
+  #beta4_calfSurv_harvest = 'Calf survival harvest effect",
+  beta5_calfSurv_elkN = "Calf survival density dependence effect",
+  
   beta0_yaSurv = "YA survival intercept",
   beta1_yaSurv_wolfN = "YA survival wolf effect",
   beta2_yaSurv_wintPPT = "YA survival winter precipitation effect",
   beta3_yaSurv_grizN = "YA survival grizzly effect",
-  beta4_yaSurv_elkN = "YA survival density dependence effect",
+  #beta4_yaSurv_harvest = 'YA survival harvest effect",
+  beta5_yaSurv_elkN = "YA survival density dependence effect",
+  
   beta0_oaSurv = "OA survival intercept",
   beta1_oaSurv_wolfN = "OA survival wolf effect",
   beta2_oaSurv_wintPPT = "OA survival winter precipitation effect",
   beta3_oaSurv_grizN = "OA survival grizzly effect",
-  beta4_oaSurv_elkN = "OA survival density dependence effect",
+  #beta4_oaSurv_harvest = 'OA survival harvest effect",
+  beta5_oaSurv_elkN = "OA survival density dependence effect",
+  
   beta0_wpupSurv = "Wolf pup survival intercept",
   beta1_wpupSurv_elkN = "Wolf pup survival elk effect",
   beta2_wpupSurv_bisonN = "Wolf pup survival bison effect",
   beta3_wpupSurv_wolfN = "Wolf pup survival density dependence effect",
+  
   beta0_wadSurv = "Wolf adult survival intercept",
   beta1_wadSurv_elkN = "Wolf adult survival elk effect",
   beta2_wadSurv_bisonN = "Wolf adult survival bison effect",
   beta3_wadSurv_wolfN = "Wolf adult survival density dependence effect",
-  # new griz var (2026-06-01)
+  
   beta1_griz_elkCalves = "Grizzly elk calves effect"
 )
 
@@ -340,6 +347,13 @@ griz_N_summ <- extract_abundance_summary(
   stage_map = c(griz_N = "Grizzly abundance")
 )
 
+bison_N_summ <- extract_abundance_summary(
+  icm_clean,
+  params = "bison_N",
+  years = community_years,
+  stage_map = c(bison_N = "NR bison abundance")
+)
+
 elk_vrates2 <- extract_indexed_summary(
   icm_clean,
   params = c("elk_s_c", "elk_s_ya", "elk_s_oa", "elk_p_13", "elk_f_ya", "elk_f_oa"),
@@ -397,10 +411,20 @@ griz_coef_rhat <- get_rhat_issues(MCMCsummary(
 reg_coef_rhat <- get_rhat_issues(MCMCsummary(
   icm_clean,
   params = c(
-    "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_wintPPT", "beta3_calfSurv_grizN", "beta4_calfSurv_elkN",
-    "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", "beta4_yaSurv_elkN",
-    "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", "beta4_oaSurv_elkN",
+    "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_wintPPT", "beta3_calfSurv_grizN", 
+    #'beta4_calfSurv_harvest",
+    "beta5_calfSurv_elkN",
+    
+    "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", 
+    #'beta4_yaSurv_harvest",
+    "beta5_yaSurv_elkN",
+    
+    "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", 
+    #'beta4_oaSurv_harvest",
+    "beta5_oaSurv_elkN",
+    
     "beta0_wpupSurv", "beta1_wpupSurv_elkN", "beta2_wpupSurv_bisonN", "beta3_wpupSurv_wolfN",
+    
     "beta0_wadSurv", "beta1_wadSurv_elkN", "beta2_wadSurv_bisonN", "beta3_wadSurv_wolfN"
   )
 ))
@@ -438,6 +462,14 @@ wolf_obs_long <- make_observed_long(
   )
 )
 
+bison_obs_long <- make_observed_long(
+  bison,
+  year_col = "year",
+  cols_map = c(
+    NR_Bison = "NR bison abundance"
+  )
+)
+
 griz_obs_long <- make_observed_long(
   grizzly,
   year_col = "year",
@@ -463,6 +495,12 @@ griz_validation_plot <- plot_validation(
   griz_N_summ,
   griz_obs_long,
   title = "Grizzly posterior abundance estimates with observed data"
+)
+
+bison_validation_plot <- plot_validation(
+  bison_N_summ,
+  bison_obs_long,
+  title = "Bison posterior abundance estimates with observed data"
 )
 
 elk_vrate_plot <- plot_vital_rates(
@@ -553,7 +591,8 @@ elk_model_specs <- list(
       wolf_N_tot = "beta1_calfSurv_wolfN",
       winter_ppt_mm = "beta2_calfSurv_wintPPT",
       griz_N = "beta3_calfSurv_grizN",
-      elk_N_female = "beta4_calfSurv_elkN"
+      # harvest = 'beta4_calfSurv_harvest,
+      elk_N_female = "beta5_calfSurv_elkN"
     )
   ),
   "Young adult survival" = list(
@@ -562,7 +601,8 @@ elk_model_specs <- list(
       wolf_N_tot = "beta1_yaSurv_wolfN",
       winter_ppt_mm = "beta2_yaSurv_wintPPT",
       griz_N = "beta3_yaSurv_grizN",
-      elk_N_female = "beta4_yaSurv_elkN"
+      # harvest = 'beta4_yaSurv_harvest,
+      elk_N_female = "beta5_yaSurv_elkN"
     )
   ),
   "Old adult survival" = list(
@@ -571,7 +611,8 @@ elk_model_specs <- list(
       wolf_N_tot = "beta1_oaSurv_wolfN",
       winter_ppt_mm = "beta2_oaSurv_wintPPT",
       griz_N = "beta3_oaSurv_grizN",
-      elk_N_female = "beta4_oaSurv_elkN"
+      # harvest = 'beta4_oaSurv_harvest,
+      elk_N_female = "beta5_oaSurv_elkN"
     )
   )
 )
@@ -923,9 +964,18 @@ make_coef_density_plot_grouped <- function(post_mat, coef_names, label_map,
 elk_coef_plot <- make_coef_density_plot_grouped(
   post_mat = post_mat,
   coef_names = c(
-    "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_wintPPT", "beta3_calfSurv_grizN", "beta4_calfSurv_elkN",
-    "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", "beta4_yaSurv_elkN",
-    "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", "beta4_oaSurv_elkN"
+    "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_wintPPT", "beta3_calfSurv_grizN", 
+    # beta4_calfSurv_harvest,
+    "beta5_calfSurv_elkN",
+    
+    "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", 
+    # beta4_yaSurv_harvest,
+    "beta5_yaSurv_elkN",
+    
+    "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", 
+    # beta4_oaSurv_harvest,
+    "beta5_oaSurv_elkN"
+    
   ),
   label_map = pretty_coef_labels,
   keep = dens_coefs_elk,
@@ -1131,10 +1181,13 @@ elasticity_combo <- plot_grid(
 ############---------------------- Final plots ----------------------###########
 ################################################################################
 
-# abundance validation and vital rates
+# abundance validation
 elk_validation_plot
 wolf_validation_plot
 griz_validation_plot
+bison_validation_plot
+
+# vital rates
 elk_vrate_plot
 wolf_vrate_plot
 

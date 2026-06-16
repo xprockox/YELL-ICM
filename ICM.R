@@ -293,8 +293,12 @@ covars <- annual_prism %>%
   arrange(match(year, community_years))
 
 # standardize all covars
+zscore_na <- function(x) {
+  (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
+}
+
 covars_std <- covars %>%
-  mutate(across(-year, ~ as.numeric(scale(.))))
+  mutate(across(-year, zscore_na))
 
 ################################################################################
 ############################### NIMBLE model ###################################
