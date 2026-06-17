@@ -19,7 +19,7 @@ library(stringr)
 ################################################################################
 
 # load model results
-load("data/outputs/ICM_parallel_output_2026-06-15.RData")
+load("data/outputs/ICM_parallel_output_2026-06-16.RData")
 
 # import elk data
 elk_dat_n <- read.csv("data/elk_abundanceEstimates_stages.csv")
@@ -98,14 +98,14 @@ pretty_coef_labels <- c(
   beta1_yaSurv_wolfN = "YA survival wolf effect",
   beta2_yaSurv_wintPPT = "YA survival winter precipitation effect",
   beta3_yaSurv_grizN = "YA survival grizzly effect",
-  #beta4_yaSurv_harvest = 'YA survival harvest effect",
+  beta4_yaSurv_harvest = 'YA survival harvest effect',
   beta5_yaSurv_elkN = "YA survival density dependence effect",
   
   beta0_oaSurv = "OA survival intercept",
   beta1_oaSurv_wolfN = "OA survival wolf effect",
   beta2_oaSurv_wintPPT = "OA survival winter precipitation effect",
   beta3_oaSurv_grizN = "OA survival grizzly effect",
-  #beta4_oaSurv_harvest = 'OA survival harvest effect",
+  beta4_oaSurv_harvest = 'OA survival harvest effect',
   beta5_oaSurv_elkN = "OA survival density dependence effect",
   
   beta0_wpupSurv = "Wolf pup survival intercept",
@@ -118,7 +118,8 @@ pretty_coef_labels <- c(
   beta2_wadSurv_bisonN = "Wolf adult survival bison effect",
   beta3_wadSurv_wolfN = "Wolf adult survival density dependence effect",
   
-  beta1_griz_elkCalves = "Grizzly elk calves effect"
+  beta1_griz_elkCalves = "Grizzly elk calves effect",
+  beta1_bison_cull = 'Bison cull/harvest effect'
 )
 
 ################################################################################
@@ -370,18 +371,29 @@ wolf_vrates2 <- extract_indexed_summary(
   fecundity_params = c("Fecundity (f)")
 )
 
-griz_mu_summ <- extract_indexed_summary(
-  icm_clean,
-  params = "griz_mu",
-  years = community_years
-) %>%
-  filter(year %in% community_years[-1])
+
 
 griz_logN_summ <- extract_indexed_summary(
   icm_clean,
   params = "griz_logN",
   years = community_years
 )
+
+
+
+bison_logN_summ <- extract_indexed_summary(
+  icm_clean,
+  params = "bison_logN",
+  years = community_years
+)
+
+bison_mu_summ <- extract_indexed_summary(
+  icm_clean,
+  params = "bison_mu",
+  years = community_years
+) %>%
+  filter(year %in% community_years[-1])
+
 
 elk_N_rhat <- get_rhat_issues(MCMCsummary(
   icm_clean,
@@ -408,6 +420,11 @@ griz_coef_rhat <- get_rhat_issues(MCMCsummary(
   params = "beta1_griz_elkCalves"
 ))
 
+bison_coef_rhat <- get_rhat_issues(MCMCsummary(
+  icm_clean,
+  params = "beta1_bison_cull"
+))
+
 reg_coef_rhat <- get_rhat_issues(MCMCsummary(
   icm_clean,
   params = c(
@@ -416,11 +433,11 @@ reg_coef_rhat <- get_rhat_issues(MCMCsummary(
     "beta5_calfSurv_elkN",
     
     "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", 
-    #'beta4_yaSurv_harvest",
+    'beta4_yaSurv_harvest',
     "beta5_yaSurv_elkN",
     
     "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", 
-    #'beta4_oaSurv_harvest",
+    'beta4_oaSurv_harvest',
     "beta5_oaSurv_elkN",
     
     "beta0_wpupSurv", "beta1_wpupSurv_elkN", "beta2_wpupSurv_bisonN", "beta3_wpupSurv_wolfN",
@@ -434,6 +451,7 @@ elk_vrate_rhat
 wolf_N_rhat
 wolf_vrate_rhat
 griz_coef_rhat
+bison_coef_rhat
 reg_coef_rhat
 
 ################################################################################
@@ -517,6 +535,7 @@ wolf_vrate_plot <- plot_vital_rates(
 ##########----------------- Plotting data builders -----------------############
 ################################################################################
 
+# elk survival points
 elk_surv_pts <- bind_rows(
   elk_vrates2 %>%
     filter(param_base == "Calf survival (s_c)", year %in% regression_years) %>%
@@ -529,6 +548,7 @@ elk_surv_pts <- bind_rows(
     transmute(year, elk_surv = mean, elk_low = low, elk_high = high, stage = "Old adult survival")
 )
 
+# wolf survival points
 wolf_surv_pts <- bind_rows(
   wolf_vrates2 %>%
     filter(param_base == "Pup survival (s_p)", year %in% regression_years) %>%
@@ -538,33 +558,61 @@ wolf_surv_pts <- bind_rows(
     transmute(year, wolf_surv = mean, wolf_low = low, wolf_high = high, stage = "Adult survival")
 )
 
+# wolf abundance points used in elk plots
 wolf_pts_elk <- summarize_indexed_draws(post_mat, "wolf_N_tot", community_years, "wolf_N_tot") %>%
   filter(year %in% regression_years) %>%
   rename(wolf_low = low, wolf_high = high)
 
+# wolf abundance points used in wolf plots
 wolf_pts_wolf <- summarize_indexed_draws(post_mat, "wolf_N_tot", community_years, "wolf_N_tot") %>%
   filter(year %in% regression_years) %>%
   rename(wolfN_low = low, wolfN_high = high)
 
+# elk abundance points
 elk_abund_pts <- summarize_indexed_draws(post_mat, "elk_N_female", community_years, "elk_N_female") %>%
   filter(year %in% regression_years) %>%
   rename(elk_low_x = low, elk_high_x = high)
 
+# grizzly abundance points
 griz_pts <- summarize_indexed_draws(post_mat, "griz_N", community_years, "griz_N") %>%
   filter(year %in% regression_years) %>%
   rename(griz_low = low, griz_high = high)
 
+# elk calves points for grizzly state-space
+elk_calf_griz_pts <- summarize_indexed_draws(
+  post_mat, "elk_calves_born", community_years[-length(community_years)], "elk_calves_born"
+) %>%
+  filter(year %in% regression_years) %>%
+  rename(x_low = low, x_high = high)
+
+# ya elk harvest points
+ya_harvest_pts <- covars %>%
+  filter(year %in% regression_years) %>%
+  select(year, age_2_13)
+
+# oa elk harvest points
+oa_harvest_pts <- covars %>%
+  filter(year %in% regression_years) %>%
+  select(year, age_14_plus)
+
+# bison culled points for bison state-space
+bison_cull_pts <- covars %>%
+  filter(year %in% regression_years) %>%
+  select(year, total_cull_harvest)
+
+# create plotting dataframe for elk survival
 plot_df_elk <- elk_surv_pts %>%
   left_join(wolf_pts_elk, by = "year") %>%
   left_join(elk_abund_pts, by = "year") %>%
   left_join(
     covars %>%
       filter(year %in% regression_years) %>%
-      select(year, winter_ppt_mm),
+      select(year, winter_ppt_mm, age_2_13, age_14_plus),
     by = "year"
   ) %>%
   left_join(griz_pts, by = "year")
 
+# create plotting dataframe for wolf survival
 wolf_plot_df <- wolf_surv_pts %>%
   left_join(
     summarize_indexed_draws(post_mat, "elk_N_female", community_years, "elk_N_female") %>%
@@ -591,7 +639,6 @@ elk_model_specs <- list(
       wolf_N_tot = "beta1_calfSurv_wolfN",
       winter_ppt_mm = "beta2_calfSurv_wintPPT",
       griz_N = "beta3_calfSurv_grizN",
-      # harvest = 'beta4_calfSurv_harvest,
       elk_N_female = "beta5_calfSurv_elkN"
     )
   ),
@@ -601,7 +648,7 @@ elk_model_specs <- list(
       wolf_N_tot = "beta1_yaSurv_wolfN",
       winter_ppt_mm = "beta2_yaSurv_wintPPT",
       griz_N = "beta3_yaSurv_grizN",
-      # harvest = 'beta4_yaSurv_harvest,
+      elk_ya_Harvest = "beta4_yaSurv_harvest",
       elk_N_female = "beta5_yaSurv_elkN"
     )
   ),
@@ -611,7 +658,7 @@ elk_model_specs <- list(
       wolf_N_tot = "beta1_oaSurv_wolfN",
       winter_ppt_mm = "beta2_oaSurv_wintPPT",
       griz_N = "beta3_oaSurv_grizN",
-      # harvest = 'beta4_oaSurv_harvest,
+      elk_oa_Harvest = "beta4_oaSurv_harvest",
       elk_N_female = "beta5_oaSurv_elkN"
     )
   )
@@ -672,6 +719,24 @@ predictor_specs <- list(
     xmin = "elk_low_x",
     xmax = "elk_high_x",
     label = "Elk abundance"
+  ),
+  elk_ya_Harvest = list(
+    raw_col = "age_2_13",
+    raw_df = ya_harvest_pts,
+    std_fun = function(x) (x - mean(covars$age_2_13, na.rm = TRUE)) / sd(covars$age_2_13, na.rm = TRUE),
+    held_value = 0,
+    xmin = NULL,
+    xmax = NULL,
+    label = "Young adult elk harvest"
+  ),
+  elk_oa_Harvest = list(
+    raw_col = "age_14_plus",
+    raw_df = oa_harvest_pts,
+    std_fun = function(x) (x - mean(covars$age_14_plus, na.rm = TRUE)) / sd(covars$age_14_plus, na.rm = TRUE),
+    held_value = 0,
+    xmin = NULL,
+    xmax = NULL,
+    label = "Old adult elk harvest"
   ),
   NR_Bison = list(
     raw_col = "NR_Bison",
@@ -764,6 +829,38 @@ plot_effect <- function(plot_df, curve_df, x_var, y_var, ymin_var, ymax_var,
 }
 
 ################################################################################
+############----------- State-space effect curve plots -------------############
+################################################################################
+
+make_bison_cull_effect_curve <- function(post_mat, cull_vals) {
+  beta_draws <- post_mat[, "beta1_bison_cull", drop = TRUE]
+  x_trans <- log(cull_vals + 1e-6)
+  
+  effect_mat <- outer(beta_draws, x_trans)
+  
+  tibble(
+    x = cull_vals,
+    effect = apply(effect_mat, 2, mean),
+    low = apply(effect_mat, 2, quantile, probs = 0.025, na.rm = TRUE),
+    high = apply(effect_mat, 2, quantile, probs = 0.975, na.rm = TRUE)
+  )
+}
+
+make_griz_elkCalf_effect_curve <- function(post_mat, calf_vals) {
+  beta_draws <- post_mat[, "beta1_griz_elkCalves", drop = TRUE]
+  x_trans <- log(calf_vals + 1e-6)
+  
+  effect_mat <- outer(beta_draws, x_trans)
+  
+  tibble(
+    x = calf_vals,
+    effect = apply(effect_mat, 2, mean),
+    low = apply(effect_mat, 2, quantile, probs = 0.025, na.rm = TRUE),
+    high = apply(effect_mat, 2, quantile, probs = 0.975, na.rm = TRUE)
+  )
+}
+
+################################################################################
 ############------------ Reproducing regression plots --------------############
 ################################################################################
 
@@ -771,6 +868,8 @@ line_df_wolf_elk <- make_effect_curve(post_mat, elk_model_specs, "wolf_N_tot", p
 line_df_ppt_elk <- make_effect_curve(post_mat, elk_model_specs, "winter_ppt_mm", predictor_specs)
 line_df_griz_elk <- make_effect_curve(post_mat, elk_model_specs, "griz_N", predictor_specs)
 line_df_elkN_elk <- make_effect_curve(post_mat, elk_model_specs, "elk_N_female", predictor_specs)
+line_df_yaHarvest_elk <- make_effect_curve(post_mat, elk_model_specs, "elk_ya_Harvest", predictor_specs)
+line_df_oaHarvest_elk <- make_effect_curve(post_mat, elk_model_specs, "elk_oa_Harvest", predictor_specs)
 
 line_df_elk_wolf <- make_effect_curve(post_mat, wolf_model_specs, "elk_N_female", predictor_specs)
 line_df_bison_wolf <- make_effect_curve(post_mat, wolf_model_specs, "NR_Bison", predictor_specs)
@@ -840,6 +939,36 @@ elkN_plot_elk <- plot_effect(
   line_color = "#8C510A"
 )
 
+yaHarvest_plot_elk <- plot_effect(
+  plot_df = plot_df_elk %>% filter(stage == "Young adult survival"),
+  curve_df = line_df_yaHarvest_elk %>% filter(stage == "Young adult survival"),
+  x_var = "age_2_13",
+  y_var = "elk_surv",
+  ymin_var = "elk_low",
+  ymax_var = "elk_high",
+  x_label = "Young adult elk harvest",
+  y_label = "Young adult elk survival",
+  title = "Estimated effect of young adult elk harvest on young adult survival",
+  subtitle = "Other predictors held constant at their means",
+  fill_color = "#8C510A",
+  line_color = "#8C510A"
+)
+
+oaHarvest_plot_elk <- plot_effect(
+  plot_df = plot_df_elk %>% filter(stage == "Old adult survival"),
+  curve_df = line_df_oaHarvest_elk %>% filter(stage == "Old adult survival"),
+  x_var = "age_14_plus",
+  y_var = "elk_surv",
+  ymin_var = "elk_low",
+  ymax_var = "elk_high",
+  x_label = "Old adult elk harvest",
+  y_label = "Old adult elk survival",
+  title = "Estimated effect of old adult elk harvest on old adult survival",
+  subtitle = "Other predictors held constant at their means",
+  fill_color = "#B35806",
+  line_color = "#B35806"
+)
+
 wolf_main_plot <- plot_effect(
   plot_df = wolf_plot_df,
   curve_df = line_df_elk_wolf,
@@ -889,6 +1018,82 @@ wolfN_plot_wolf <- plot_effect(
   line_color = "#4B7F52"
 )
 
+bison_cull_curve <- make_bison_cull_effect_curve(
+  post_mat,
+  seq(
+    min(bison_cull_pts$total_cull_harvest, na.rm = TRUE),
+    max(bison_cull_pts$total_cull_harvest, na.rm = TRUE),
+    length.out = 200
+  )
+)
+
+bison_cull_plot <- ggplot() +
+  geom_ribbon(
+    data = bison_cull_curve,
+    aes(x = x, ymin = low, ymax = high),
+    fill = "#8C510A",
+    alpha = 0.25
+  ) +
+  geom_line(
+    data = bison_cull_curve,
+    aes(x = x, y = effect),
+    color = "#8C510A",
+    linewidth = 1
+  ) +
+  geom_point(
+    data = bison_cull_pts,
+    aes(x = total_cull_harvest, y = 0),
+    shape = 21,
+    fill = "gold",
+    color = "black",
+    size = 2
+  ) +
+  theme_classic() +
+  labs(
+    x = "Bison culled / harvested",
+    y = "Contribution to expected log bison abundance",
+    title = "Estimated effect of bison cull/harvest on bison population process",
+    subtitle = "Curve shows beta1_bison_cull × log(cull/harvest)"
+  )
+
+griz_elkCalf_curve <- make_griz_elkCalf_effect_curve(
+  post_mat,
+  seq(
+    min(elk_calf_griz_pts$elk_calves_born, na.rm = TRUE),
+    max(elk_calf_griz_pts$elk_calves_born, na.rm = TRUE),
+    length.out = 200
+  )
+)
+
+griz_elkCalf_plot <- ggplot() +
+  geom_ribbon(
+    data = griz_elkCalf_curve,
+    aes(x = x, ymin = low, ymax = high),
+    fill = "#4B7F52",
+    alpha = 0.25
+  ) +
+  geom_line(
+    data = griz_elkCalf_curve,
+    aes(x = x, y = effect),
+    color = "#4B7F52",
+    linewidth = 1
+  ) +
+  geom_point(
+    data = elk_calf_griz_pts,
+    aes(x = elk_calves_born, y = 0),
+    shape = 21,
+    fill = "gold",
+    color = "black",
+    size = 2
+  ) +
+  theme_classic() +
+  labs(
+    x = "Elk calves born",
+    y = "Contribution to expected log grizzly abundance",
+    title = "Estimated effect of elk calf abundance on grizzly population process",
+    subtitle = "Curve shows beta1_griz_elkCalves × log(elk calves born)"
+  )
+
 ################################################################################
 ##########----------------- Coefficient density plots -----------------#########
 ################################################################################
@@ -899,11 +1104,13 @@ make_coef_density_plot_grouped <- function(post_mat, coef_names, label_map,
                                            title,
                                            effect_order = c(
                                              "Intercept",
-                                             "Wolf",
+                                             "Wolf abundance",
                                              "Winter precipitation",
-                                             "Grizzly",
-                                             "Elk",
-                                             "Bison"
+                                             "Grizzly abundance",
+                                             "Harvest",
+                                             "Elk abundance",
+                                             "Bison abundance",
+                                             "Density dependence"
                                            ),
                                            model_order = NULL) {
   keep_resolved <- resolve_coef_keep(
@@ -932,6 +1139,7 @@ make_coef_density_plot_grouped <- function(post_mat, coef_names, label_map,
         str_detect(pretty, regex("winter precipitation effect", ignore_case = TRUE)) ~ "Winter precipitation",
         str_detect(pretty, regex("grizzly effect", ignore_case = TRUE)) ~ "Grizzly abundance",
         str_detect(pretty, regex("bison effect", ignore_case = TRUE)) ~ "Bison abundance",
+        str_detect(pretty, regex("harvest effect", ignore_case = TRUE)) ~ "Harvest",
         str_detect(pretty, regex("density dependence effect", ignore_case = TRUE)) ~ "Density dependence",
         str_detect(pretty, regex("wolf effect", ignore_case = TRUE)) ~ "Wolf abundance",
         str_detect(pretty, regex("elk effect", ignore_case = TRUE)) ~ "Elk abundance",
@@ -939,11 +1147,9 @@ make_coef_density_plot_grouped <- function(post_mat, coef_names, label_map,
       )
     )
   
-  # force column order
   df <- df %>%
     mutate(effect_type = factor(effect_type, levels = effect_order))
   
-  # optional row order
   if (!is.null(model_order)) {
     df <- df %>%
       mutate(model_group = factor(model_group, levels = model_order))
@@ -969,11 +1175,11 @@ elk_coef_plot <- make_coef_density_plot_grouped(
     "beta5_calfSurv_elkN",
     
     "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", 
-    # beta4_yaSurv_harvest,
+    'beta4_yaSurv_harvest',
     "beta5_yaSurv_elkN",
     
     "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", 
-    # beta4_oaSurv_harvest,
+    'beta4_oaSurv_harvest',
     "beta5_oaSurv_elkN"
     
   ),
@@ -986,6 +1192,7 @@ elk_coef_plot <- make_coef_density_plot_grouped(
     "Wolf abundance",
     "Grizzly abundance",
     "Winter precipitation",
+    "Harvest",
     "Density dependence"
   ),  
   model_order = c("Calf survival", "YA survival", "OA survival")
@@ -1019,6 +1226,17 @@ griz_coef_plot <- tibble(value = post_mat[, "beta1_griz_elkCalves"]) %>%
     x = "Posterior value",
     y = "Density",
     title = "Posterior distribution of elk calves effect on grizzly abundance"
+  )
+
+bison_coef_plot <- tibble(value = post_mat[, "beta1_bison_cull"]) %>%
+  ggplot(aes(x = value)) +
+  geom_density(fill = "#8C510A", alpha = 0.45) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  theme_bw() +
+  labs(
+    x = "Posterior value",
+    y = "Density",
+    title = "Posterior distribution of bison cull/harvest effect on bison abundance"
   )
 
 ################################################################################
@@ -1075,6 +1293,12 @@ griz_coef_evidence <- classify_evidence(post_mat[, "beta1_griz_elkCalves"]) %>%
   mutate(
     parameter = "beta1_griz_elkCalves",
     label = "Grizzly elk calves effect"
+  )
+
+bison_coef_evidence <- classify_evidence(post_mat[, "beta1_bison_cull"]) %>%
+  mutate(
+    parameter = "beta1_bison_cull",
+    label = "Bison cull/harvest effect"
   )
 
 ################################################################################
@@ -1196,6 +1420,8 @@ wolf_plot_elk
 ppt_plot_elk
 griz_plot_elk
 elkN_plot_elk
+yaHarvest_plot_elk
+oaHarvest_plot_elk
 elk_coef_plot
 
 # wolf regressions
@@ -1205,7 +1431,12 @@ wolfN_plot_wolf
 wolf_coef_plot
 
 # grizzlies
+griz_elkCalf_plot
 griz_coef_plot
+
+# bison
+bison_cull_plot
+bison_coef_plot
 
 # elasticity
 lambda_plot
@@ -1477,6 +1708,27 @@ cat(
     griz_coef_evidence$direction,
     ", evidence = ",
     griz_coef_evidence$evidence,
+    "\n"
+  )
+)
+
+cat(
+  " --------------------------------------------------------\n",
+  "BISON PROCESS COEFFICIENT SUMMARY\n",
+  "--------------------------------------------------------\n\n",
+  paste0(
+    "Bison cull/harvest effect: median = ",
+    round(bison_coef_evidence$median, 3),
+    ", 95% CI [",
+    round(bison_coef_evidence$ci95_low, 3), ", ",
+    round(bison_coef_evidence$ci95_high, 3), "]",
+    ", 80% CI [",
+    round(bison_coef_evidence$ci80_low, 3), ", ",
+    round(bison_coef_evidence$ci80_high, 3), "]",
+    ", direction = ",
+    bison_coef_evidence$direction,
+    ", evidence = ",
+    bison_coef_evidence$evidence,
     "\n"
   )
 )

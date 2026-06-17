@@ -815,6 +815,18 @@ make_icm_inits <- function() {
     grizzly$griz_N
   )))
   
+  griz_obs_init <- ifelse(
+    is.na(grizzly$griz_N),
+    mean(grizzly$griz_N, na.rm = TRUE),
+    grizzly$griz_N
+  )
+  
+  bison_obs_init <- ifelse(
+    is.na(bison$NR_Bison),
+    mean(bison$NR_Bison, na.rm = TRUE),
+    bison$NR_Bison
+  )
+  
   list(
     # elk demography
     elk_p_13 = rep(0.15, n_years),
@@ -1083,7 +1095,7 @@ save(
   icm_constants,
   run_time,
   drop_regression_years,
-  file = "data/outputs/ICM_parallel_output_2026-06-15.RData"
+  file = "data/outputs/ICM_parallel_output_2026-06-17.RData"
 )
 ################################################################################
 ################################################################################
