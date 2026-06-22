@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Combines elk IPM + wolf IPM in one NIMBLE model
-### Last updated: June 15, 2026
+### Last updated: June 22, 2026
 
 ################################################################################
 ############################ Packages and settings #############################
@@ -224,7 +224,7 @@ wolf_a <- extract_marray_inputs(wolf_y, wolf_is_class2, "adult")
 # import prism data
 annual_prism <- read.csv("data/covariates/prism_annual_precip_tmean.csv")
 
-# import bison cull data
+# import bison obs & cull data
 bison <- read.csv("data/covariates/yellowstone_bison_culls_harvests_1970_2023.csv") %>%
   select(Year, Max_Bison_North, Total_Culls_Harvests) %>%
   rename(
@@ -470,6 +470,7 @@ icm_code <- nimbleCode({
   
   # latent grizzly abundance the first year 
   griz_logN[1] ~ dnorm(griz_logN_init_mean, 1 / 0.5^2)  
+  
   #
   ##
   ###
@@ -589,14 +590,14 @@ icm_code <- nimbleCode({
   beta1_yaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_yaSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
   beta3_yaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
-  beta4_yaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
+  #beta4_yaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   beta5_yaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   
   beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2)
   beta1_oaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_oaSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
   beta3_oaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
-  beta4_oaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
+  #beta4_oaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   beta5_oaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   
   sigma_calf ~ dunif(0, 0.5)
@@ -667,7 +668,7 @@ icm_code <- nimbleCode({
       beta1_yaSurv_wolfN * wolf_N_tot_std[t - 1] +
       beta2_yaSurv_wintPPT * wintPPT[t] +
       beta3_yaSurv_grizN * griz_N_std[t - 1] +
-      beta4_yaSurv_harvest * elk_ya_Harvest[t] +
+      #beta4_yaSurv_harvest * elk_ya_Harvest[t] +
       beta5_yaSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_ya[t]
     
@@ -676,7 +677,7 @@ icm_code <- nimbleCode({
       beta1_oaSurv_wolfN * wolf_N_tot_std[t - 1] +
       beta2_oaSurv_wintPPT * wintPPT[t] +
       beta3_oaSurv_grizN * griz_N_std[t - 1] +
-      beta4_oaSurv_harvest * elk_oa_Harvest[t] +
+      #beta4_oaSurv_harvest * elk_oa_Harvest[t] +
       beta5_oaSurv_elkN * elk_N_female_std[t - 1] +
       eps_elk_s_oa[t]
     
@@ -751,8 +752,8 @@ icm_data <- list(
   wintPPT = covars_std$winter_ppt_mm,
   bison_obs = bison$NR_Bison,
   griz_obs = grizzly$griz_N,
-  elk_ya_Harvest = covars_std$age_2_13,
-  elk_oa_Harvest = covars_std$age_14_plus
+  #elk_ya_Harvest = covars_std$age_2_13,
+  #elk_oa_Harvest = covars_std$age_14_plus
 )
 
 # initial values
@@ -879,14 +880,14 @@ make_icm_inits <- function() {
     beta1_yaSurv_wolfN = 0,
     beta2_yaSurv_wintPPT = 0,
     beta3_yaSurv_grizN = 0,
-    beta4_yaSurv_harvest = 0,
+    #beta4_yaSurv_harvest = 0,
     beta5_yaSurv_elkN = 0,
     
     beta0_oaSurv = qlogis(0.80),
     beta1_oaSurv_wolfN = 0,
     beta2_oaSurv_wintPPT = 0,
     beta3_oaSurv_grizN = 0,
-    beta4_oaSurv_harvest = 0,
+    #beta4_oaSurv_harvest = 0,
     beta5_oaSurv_elkN = 0,
     
     sigma_calf = 0.1,
@@ -935,9 +936,9 @@ icm_params <- c(
   # elk survival regression covariates
   "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_wintPPT", "beta3_calfSurv_grizN",# "beta4_calfSurv_harvest", 
   "beta5_calfSurv_elkN",
-  "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", "beta4_yaSurv_harvest", 
+  "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_wintPPT", "beta3_yaSurv_grizN", #"beta4_yaSurv_harvest", 
   "beta5_yaSurv_elkN",
-  "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", "beta4_oaSurv_harvest", 
+  "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_wintPPT", "beta3_oaSurv_grizN", #"beta4_oaSurv_harvest", 
   "beta5_oaSurv_elkN",
   # elk errors
   "sigma_calf", "sigma_ya", "sigma_oa", "eps_elk_s_c", "eps_elk_s_ya", "eps_elk_s_oa",
@@ -1095,7 +1096,7 @@ save(
   icm_constants,
   run_time,
   drop_regression_years,
-  file = "data/outputs/ICM_parallel_output_2026-06-17.RData"
+  file = "data/outputs/ICM_parallel_output_2026-06-22.RData"
 )
 ################################################################################
 ################################################################################
