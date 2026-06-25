@@ -306,16 +306,18 @@ covars_std <- covars %>%
 
 icm_code <- nimbleCode({
   
-  ########## ELK SUBMODEL ##########
+  ##############################################################
+  ########## ------------- ELK SUBMODEL ------------- ##########
+  ##############################################################
   
-  # prior for probability of 13 y.o. 
+  # prior for probability of a young adult being 13 y.o. 
   for (t in 1:n_years) {
     logit(elk_p_13[t]) ~ dnorm(qlogis(0.15), 1 / 0.5^2)
   }
   
   # prior for fecundity
   for (t in 1:(n_years - 1)) {
-    elk_f_ya[t] ~ dbeta(1, 1) # bound 0 - 1, assuming cows only have max 1 calf
+    elk_f_ya[t] ~ dbeta(1, 1) # bound 0 - 1; assumes cows have max 1 calf
     elk_f_oa[t] ~ dbeta(1, 1)
   }
   
@@ -333,49 +335,72 @@ icm_code <- nimbleCode({
   
   # state-space abundance
   for (t in 1:(n_years - 1)) {
-    elk_mu_1y[t + 1] <- elk_f_ya[t] * elk_s_c[t] * elk_N_ya[t] +
-      elk_f_oa[t] * elk_s_c[t] * elk_N_oa[t]
+    elk_mu_1y[t + 1] <- # yearlings in year t + 1 are comprised of...
+      elk_f_ya[t] * elk_s_c[t] * elk_N_ya[t] + # the number of calves born from young adults which survived 
+      elk_f_oa[t] * elk_s_c[t] * elk_N_oa[t] # plus the number of calves born from old adults which survived
     
-    elk_mu_ya[t + 1] <- elk_s_ya[t] * elk_N_1y[t] +
-      elk_s_ya[t] * (1 - elk_p_13[t]) * elk_N_ya[t]
+    elk_mu_ya[t + 1] <- # young adults in year t + 1 are comprised of...
+      elk_s_ya[t] * elk_N_1y[t] + # yearlings that survived
+      elk_s_ya[t] * (1 - elk_p_13[t]) * elk_N_ya[t] - # plus young adults that survived and did not transition to old adults
+      elk_ya_harvest[t] # minus the number of young adults harvested
     
-    elk_mu_oa[t + 1] <- elk_s_ya[t] * elk_p_13[t] * elk_N_ya[t] +
-      elk_s_oa[t] * elk_N_oa[t]
+    elk_mu_oa[t + 1] <- # old adults in year t + 1 are comprised of...
+      elk_s_ya[t] * elk_p_13[t] * elk_N_ya[t] + # young adults that survived and transitioned
+      elk_s_oa[t] * elk_N_oa[t] - # plus old adults that survived
+      elk_oa_harvest[t] # minus the number of old adults harvested
     
+    # demographic stochasticity (actual numbers differ from expected)
     elk_N_1y[t + 1] ~ dpois(max(1e-6, elk_mu_1y[t + 1]))
     elk_N_ya[t + 1] ~ dpois(max(1e-6, elk_mu_ya[t + 1]))
     elk_N_oa[t + 1] ~ dpois(max(1e-6, elk_mu_oa[t + 1]))
     
+    # total number of females accounting for observation error
     elk_N_female[t + 1] <- elk_N_1y[t + 1] + elk_N_ya[t + 1] + elk_N_oa[t + 1]
     elk_obs_female[t + 1] ~ dlnorm(log(elk_N_female[t + 1] + 1e-6), elk_tau_obs_female)
   }
   
-  # detection probability for CJS
+  # prior for detection probability in CJS
   for (t in 1:n_years) {
     elk_p_det[t] ~ dunif(0, 1)
   }
   
   # CJS using M-arrays
-  for (r in 1:(n_years - 1)) {
-    for (j in 1:(n_years - 1)) {
-      elk_marr_prob_ya[r, j] <-
-        equals(j, r) * elk_s_ya[r] * elk_p_det[r + 1] +
-        step(j - r - 0.5) *
-        prod(elk_s_ya[r:j]) *
-        prod(1 - elk_p_det[(r + 1):j]) *
-        elk_p_det[j + 1]
+  for (r in 1:(n_years - 1)) { # release occasions
+    for (j in 1:(n_years - 1)) { # recaptures
       
+      # ------ YOUNG ADULTS ------
+      elk_marr_prob_ya[r, j] <-
+        
+        # the first recapture occurs immediately next year
+        equals(j, r) * # this is 1 when j = r
+        elk_s_ya[r] * # elk survived one year
+        elk_p_det[r + 1] + # and was detected
+        
+        # OR the first recapture occurs later than next year
+        step(j - r - 0.5) * # this is 1 when j > r
+        prod(elk_s_ya[r:j]) * # elk survived from years r:j
+        prod(1 - elk_p_det[(r + 1):j]) * # was not detected during that time
+        elk_p_det[j + 1] # but was eventually detected
+      
+      # ------ OLD ADULTS ------
       elk_marr_prob_oa[r, j] <-
-        equals(j, r) * elk_s_oa[r] * elk_p_det[r + 1] +
+        
+        # the first recapture occurs immediately next year
+        equals(j, r) * 
+        elk_s_oa[r] * elk_p_det[r + 1] +
         step(j - r - 0.5) *
+        
+        # OR the first recapture occurs later than next year
         prod(elk_s_oa[r:j]) *
         prod(1 - elk_p_det[(r + 1):j]) *
         elk_p_det[j + 1]
     }
     
+    # this is the probability that an individual is never seen again after release
     elk_marr_prob_ya[r, n_years] <- 1 - sum(elk_marr_prob_ya[r, 1:(n_years - 1)])
     elk_marr_prob_oa[r, n_years] <- 1 - sum(elk_marr_prob_oa[r, 1:(n_years - 1)])
     
+    # likelihood is multinomial, because the animal could be seen in 1st recapture, 2nd, 3rd...etc.
     elk_marray_ya[r, 1:n_years] ~ dmulti(elk_marr_prob_ya[r, 1:n_years], elk_rel_ya[r])
     elk_marray_oa[r, 1:n_years] ~ dmulti(elk_marr_prob_oa[r, 1:n_years], elk_rel_oa[r])
   }
@@ -399,7 +424,9 @@ icm_code <- nimbleCode({
     elk_harvested_13yo[t] ~ dbin(elk_p_13[t], elk_harvested_ya[t])
   }
   
-  ########## WOLF SUBMODEL ##########
+  ###############################################################
+  ########## ------------- WOLF SUBMODEL ------------- ##########
+  ###############################################################
   
   # prior for fecundity
   for (t in 1:(n_years-1)) {
@@ -410,84 +437,119 @@ icm_code <- nimbleCode({
   wolf_sigma_obs ~ dunif(0.05, 2)
   wolf_tau_obs <- 1 / (wolf_sigma_obs^2)
   
-  # initial values (from reintroduction)
+  # initial values (using true numbers from reintroduction)
   wolf_N_a[1] <- 8
   wolf_N_p[1] <- 6
   wolf_N_p_sum[1] <- 0 # no summer pups the first year (not reintroduced yet)
   
+  # pup survival / introduction
+  for (t in 2:n_years) {
+    
+    # number of pups produced biologically (not introduced) is the number of pups in summer that survived
+    wolf_N_p_bio[t] ~ dbin(wolf_s_p[t - 1], wolf_N_p_sum[t])
+    
+    # this just adds the 9 pups introduced in 1996
+    wolf_N_p[t] <- wolf_N_p_bio[t] + equals(t, 2) * 9
+  }
+  
   # state-space abundance
   for (t in 1:(n_years - 1)) {
-    wolf_mu_a[t + 1] <- wolf_s_a[t] * wolf_N_a[t] + wolf_N_p[t] + equals(t, 1) * 8 # 8 adults introduced in 1996
+    
+    wolf_mu_a[t + 1] <- # expected number of adults is comprised of...
+      wolf_s_a[t] * wolf_N_a[t] + # the number of adults surviving from the previous year 
+      wolf_N_p[t] + # plus the number of pups surviving from the previous year
+      equals(t, 1) * 8 # and if t = 1 (year 1996), there's an explicit addition of 8 additional adults introduced
+    
+    # demographic stochasticity
     wolf_N_a[t + 1] ~ dpois(max(1e-6, wolf_mu_a[t + 1]))
+    
+    # then the number of pups born in the summer of t + 1 is the number of adults * fecundity
     wolf_N_p_sum[t + 1] ~ dpois(max(1e-6, wolf_f[t] * wolf_N_a[t]))
   }
   
   # observation processes
   for (t in 1:n_years) {
+    
+    # deterministic calculation of total number of wolves
     wolf_N_tot[t] <- wolf_N_a[t] + wolf_N_p[t]
     
+    # summer pup observation error
     wolf_obs_p_sum[t] ~ dpois(max(1e-6, wolf_N_p_sum[t]))
+    
+    # observation error for the stage-specific counts
     wolf_obs_tot[t] ~ dlnorm(log(wolf_N_tot[t] + 1e-6), wolf_tau_obs)
     wolf_obs_p[t] ~ dlnorm(log(wolf_N_p[t] + 1e-6), wolf_tau_obs)
     wolf_obs_a[t] ~ dlnorm(log(wolf_N_a[t] + 1e-6), wolf_tau_obs)
     
+    # prior on detection probability (assumed same for pups + adults)
     wolf_p_det[t] ~ dunif(0, 1)
   }
   
-  # pup survival
-  for (t in 2:n_years) {
-    wolf_N_p_bio[t] ~ dbin(wolf_s_p[t - 1], wolf_N_p_sum[t])
-    wolf_N_p[t] <- wolf_N_p_bio[t] + equals(t, 2) * 9
-  }
-  
   # CJS using M-arrays
-  for (r in 1:(n_years - 1)) {
-    for (j in 1:(n_years - 1)) {
-      wolf_marr_prob_p[r, j] <-
-        equals(j, r) * wolf_s_p[r] * wolf_p_det[r + 1] +
-        step(j - r - 0.5) *
-        wolf_s_p[r] *
-        prod(wolf_s_a[(r + 1):j]) *
-        prod(1 - wolf_p_det[(r + 1):j]) *
-        wolf_p_det[j + 1]
+  for (r in 1:(n_years - 1)) { # release occasions
+    for (j in 1:(n_years - 1)) { # recaptures
       
+      # -------- PUPS -------- 
+      wolf_marr_prob_p[r, j] <-
+        
+        # first recapture is the very next occasion after first capture
+        equals(j, r) * # this is 1 when j = r
+        wolf_s_p[r] *  # pup survived
+        wolf_p_det[r + 1] + # pup was detected
+        
+        # first recapture is at a later occasion
+        step(j - r - 0.5) *  # this is 1 when j > r
+        wolf_s_p[r] * # pup survived first interval as a pup
+        prod(wolf_s_a[(r + 1):j]) * # then (as an adult by that time) survived for subsequent years
+        prod(1 - wolf_p_det[(r + 1):j]) * # was not detected during those years
+        wolf_p_det[j + 1] # but then was eventually detected
+      
+      # -------- ADULTS -------- 
       wolf_marr_prob_a[r, j] <-
-        equals(j, r) * wolf_s_a[r] * wolf_p_det[r + 1] +
-        step(j - r - 0.5) *
-        prod(wolf_s_a[r:j]) *
-        prod(1 - wolf_p_det[(r + 1):j]) *
-        wolf_p_det[j + 1]
+        
+        # first recapture is the very next occasion after first capture
+        equals(j, r) * # this is 1 when j = r
+        wolf_s_a[r] * wolf_p_det[r + 1] + # adult survived
+        
+        # first recapture is at a later occasion
+        step(j - r - 0.5) * # this is 1 when j > r
+        prod(wolf_s_a[r:j]) * # adult survived for however many years later
+        prod(1 - wolf_p_det[(r + 1):j]) * # but was not detected during those years
+        wolf_p_det[j + 1] # but was eventually detected
     }
     
+    # individuals that either die or are never again detected after last capture
     wolf_marr_prob_p[r, n_years] <- 1 - sum(wolf_marr_prob_p[r, 1:(n_years - 1)])
     wolf_marr_prob_a[r, n_years] <- 1 - sum(wolf_marr_prob_a[r, 1:(n_years - 1)])
     
+    # multinomial distribution
     wolf_marray_p[r, 1:n_years] ~ dmulti(wolf_marr_prob_p[r, 1:n_years], wolf_rel_p[r])
     wolf_marray_a[r, 1:n_years] ~ dmulti(wolf_marr_prob_a[r, 1:n_years], wolf_rel_a[r])
   }
   
-  ########## GRIZZLY SUBMODEL ##########
+  ###############################################################
+  ######### ------------- GRIZZLY SUBMODEL ------------ #########
+  ###############################################################
   
-  # latent grizzly abundance the first year 
+  # latent grizzly abundance the first year (norm dist with mean = overall mean obs), 
+  # just helps model get started
   griz_logN[1] ~ dnorm(griz_logN_init_mean, 1 / 0.5^2)  
   
-  #
+  # 
   ##
   ###
-  
-  # since our abundance estimates are the pre-birth-pulse estimates,
+  # since our elk abundance estimates are the pre-birth-pulse estimates,
   # we don't actually estimate the number of "calves" (instead, we do yearlings).
   # therefore, in order to estimate the number of calves that grizzlies would prey on,
   # we need to know how many total were born.
   # previously, we estimated how many would be expected to be born from young & old adults
   # separately. so now, we just derive total as the sum (deterministically)
 
-  # total calves born in each year (available to grizzlies)
+  # total calves born in each year (available to be eaten by grizzlies)
   for (t in 1:(n_years - 1)) {
     elk_calves_born[t] <- elk_f_ya[t] * elk_N_ya[t] +
       elk_f_oa[t] * elk_N_oa[t]
   }
-  
   ###
   ##
   #
@@ -497,14 +559,15 @@ icm_code <- nimbleCode({
     # for now, expected abundance in year t depends on abundance in year t - 1 + some effect of elk calves
     griz_mu[t] <-
       griz_logN[t - 1] +
-      beta1_griz_elkCalves * log(elk_calves_born[t - 1] + 1e-6)# + 
+      beta1_griz_elkCalves * log(elk_calves_born[t - 1] + 1e-6) # + 
     #   beta2_griz_x2 * griz_x2_std[t - 1] +
     #   beta3_griz_x3 * griz_x3_std[t - 1] # leaving these to make it easier to add more covariates as needed
 
+    # demographic stochasticity
     griz_logN[t] ~ dnorm(griz_mu[t], griz_tau_proc)
   }
   
-  # convert latent abundance back to natural scale
+  # convert latent log-abundance back to natural scale
   for (t in 1:n_years) {
     griz_N[t] <- exp(griz_logN[t])
   }
@@ -531,9 +594,12 @@ icm_code <- nimbleCode({
   # beta2_griz_x2 ~ dnorm(0, 1 / 0.3^2)
   # beta3_griz_x3 ~ dnorm(0, 1 / 0.3^2)
   
-  ########## BISON SUBMODEL ##########
-  
-  # latent bison abundance the first year 
+  ###############################################################
+  ######### -------------- BISON SUBMODEL ------------- #########
+  ###############################################################
+
+  # latent bison abundance the first year (norm dist with mean = overall mean obs), 
+  # just helps model get started
   bison_logN[1] ~ dnorm(bison_logN_init_mean, 1 / 0.5^2)  
   
   # state-space 
@@ -549,7 +615,7 @@ icm_code <- nimbleCode({
     bison_logN[t] ~ dnorm(bison_mu[t], bison_tau_proc)
   }
   
-  # convert latent abundance back to natural scale
+  # convert latent log-abundance back to natural scale
   for (t in 1:n_years) {
     bison_N[t] <- exp(bison_logN[t])
   }
@@ -576,9 +642,13 @@ icm_code <- nimbleCode({
   # beta2_bison_x2 ~ dnorm(0, 1 / 0.3^2)
   # beta3_bison_x3 ~ dnorm(0, 1 / 0.3^2)
   
-  ########## ELK AND WOLF SURVIVAL REGRESSIONS ##########
+  ###############################################################
+  ###### ------- ELK AND WOLF SURVIVAL REGRESSIONS ------- ######
+  ###############################################################
   
-  # elk regression priors
+  # ****** Elk regression priors ****** 
+  
+  # calves
   beta0_calfSurv ~ dnorm(qlogis(0.22), 1 / 0.3^2)
   beta1_calfSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_calfSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
@@ -586,6 +656,7 @@ icm_code <- nimbleCode({
   #beta4_calfSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   beta5_calfSurv_elkN ~ dnorm(0, 1 / 0.3^2)  
 
+  # young adults
   beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2)
   beta1_yaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_yaSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
@@ -593,6 +664,7 @@ icm_code <- nimbleCode({
   #beta4_yaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   beta5_yaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   
+  # old adults
   beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2)
   beta1_oaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_oaSurv_wintPPT ~ dnorm(0, 1 / 0.3^2)
@@ -600,32 +672,41 @@ icm_code <- nimbleCode({
   #beta4_oaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   beta5_oaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   
+  # error
   sigma_calf ~ dunif(0, 0.5)
   sigma_ya ~ dunif(0, 0.3)
   sigma_oa ~ dunif(0, 0.3)
-  
   tau_calf <- 1 / (sigma_calf^2)
   tau_ya <- 1 / (sigma_ya^2)
   tau_oa <- 1 / (sigma_oa^2)
   
-  # wolf regression priors
+  # ****** Wolf regression priors ****** 
+  
+  # pups
   beta0_wpupSurv ~ dnorm(qlogis(0.5), 1 / 0.3^2)
   beta1_wpupSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   beta2_wpupSurv_bisonN ~ dnorm(0, 1 / 0.3^2)
   beta3_wpupSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   
+  # adults
   beta0_wadSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2)
   beta1_wadSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   beta2_wadSurv_bisonN ~ dnorm(0, 1 / 0.3^2)
   beta3_wadSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
 
+  # error
   sigma_wpup ~ dunif(0, 0.5)
   sigma_wad ~ dunif(0, 0.3)
-
   tau_wpup <- 1 / (sigma_wpup^2)
   tau_wad <- 1 / (sigma_wad^2)
   
-  # pre-regression years get direct priors rather than regression structure
+  # ****** Pre-regression survival priors ****** 
+  
+  # we wanted to exclude some of the years (1995-1997) for our regressions, 
+  # because the first few years of wolf reintroduction were kind of a shitshow,
+  # and there was a lot of human influence that can't really be accounted for. 
+  # SO, pre-regression years get direct priors rather than regression structure
+  
   for (t in 1:(regression_start_idx - 1)) {
     logit(elk_s_c[t]) ~ dnorm(qlogis(0.22), 1 / 0.5^2)
     logit(elk_s_ya[t]) ~ dnorm(qlogis(0.90), 1 / 0.5^2)
@@ -640,59 +721,71 @@ icm_code <- nimbleCode({
     eps_wolf_s_a[t] <- 0
   }
   
-  # standardize wolf and elk abundance to be used as predictors
+  # ****** Standardizing abundances ****** 
+  
+  # standardize wolf and elk abundance to be used as predictors in each other's models
   for (t in 1:n_years) {
     wolf_N_tot_std[t] <- (wolf_N_tot[t] - wolf_tot_mean) / wolf_tot_sd
     elk_N_female_std[t] <- (elk_N_female[t] - elk_N_female_mean) / elk_N_female_sd
   }
   
-  # regressions
+  # ****** Regressions ****** 
+
   for (t in regression_start_idx:n_years) {
+    
+    # elk error priors
     eps_elk_s_c[t] ~ dnorm(0, tau_calf)
     eps_elk_s_ya[t] ~ dnorm(0, tau_ya)
     eps_elk_s_oa[t] ~ dnorm(0, tau_oa)
+    
+    # wolf error priors
     eps_wolf_s_p[t] ~ dnorm(0, tau_wpup)
     eps_wolf_s_a[t] ~ dnorm(0, tau_wad)
     
-    logit(elk_s_c[t]) <-
+    # elk calf regression
+    logit(elk_s_c[t]) <- # calf survival depends on....
       beta0_calfSurv +
-      beta1_calfSurv_wolfN * wolf_N_tot_std[t - 1] +
-      beta2_calfSurv_wintPPT * wintPPT[t] +
-      beta3_calfSurv_grizN * griz_N_std[t - 1] +
-      #beta4_calfSurv_harvest * elk_1y_Harvest[t] +
-      beta5_calfSurv_elkN * elk_N_female_std[t - 1] +
-      eps_elk_s_c[t]
+      beta1_calfSurv_wolfN * wolf_N_tot_std[t - 1] + # wolf abundance
+      beta2_calfSurv_wintPPT * wintPPT[t] + # winter precipitation
+      beta3_calfSurv_grizN * griz_N_std[t - 1] + # grizzly abundance
+      #beta4_calfSurv_harvest * elk_1y_Harvest[t] + # harvest
+      beta5_calfSurv_elkN * elk_N_female_std[t - 1] + # density dependence
+      eps_elk_s_c[t] # error
     
-    logit(elk_s_ya[t]) <-
+    # elk young adult regression
+    logit(elk_s_ya[t]) <- # young adult survival depends on...
       beta0_yaSurv +
-      beta1_yaSurv_wolfN * wolf_N_tot_std[t - 1] +
-      beta2_yaSurv_wintPPT * wintPPT[t] +
-      beta3_yaSurv_grizN * griz_N_std[t - 1] +
-      #beta4_yaSurv_harvest * elk_ya_Harvest[t] +
-      beta5_yaSurv_elkN * elk_N_female_std[t - 1] +
-      eps_elk_s_ya[t]
+      beta1_yaSurv_wolfN * wolf_N_tot_std[t - 1] + # wolf abundance
+      beta2_yaSurv_wintPPT * wintPPT[t] + # winter precipitation
+      beta3_yaSurv_grizN * griz_N_std[t - 1] + # grizzly abundance
+      #beta4_yaSurv_harvest * elk_ya_Harvest[t] + # harvest
+      beta5_yaSurv_elkN * elk_N_female_std[t - 1] + # density dependence
+      eps_elk_s_ya[t] # error
     
-    logit(elk_s_oa[t]) <-
+    # elk old adult regression
+    logit(elk_s_oa[t]) <- # old adult survival depends on...
       beta0_oaSurv +
-      beta1_oaSurv_wolfN * wolf_N_tot_std[t - 1] +
-      beta2_oaSurv_wintPPT * wintPPT[t] +
-      beta3_oaSurv_grizN * griz_N_std[t - 1] +
-      #beta4_oaSurv_harvest * elk_oa_Harvest[t] +
-      beta5_oaSurv_elkN * elk_N_female_std[t - 1] +
-      eps_elk_s_oa[t]
+      beta1_oaSurv_wolfN * wolf_N_tot_std[t - 1] + # wolf abundance
+      beta2_oaSurv_wintPPT * wintPPT[t] + # winter precipitation
+      beta3_oaSurv_grizN * griz_N_std[t - 1] + # grizzly abundance
+      #beta4_oaSurv_harvest * elk_oa_Harvest[t] + # harvest
+      beta5_oaSurv_elkN * elk_N_female_std[t - 1] + # density dependence
+      eps_elk_s_oa[t] # error
     
-    logit(wolf_s_p[t]) <-
+    # wolf pup regression
+    logit(wolf_s_p[t]) <- # wolf pup survival depends on...
       beta0_wpupSurv +
-      beta1_wpupSurv_elkN * elk_N_female_std[t - 1] +
-      beta2_wpupSurv_bisonN * bison_N_std[t - 1] +
-      beta3_wpupSurv_wolfN * wolf_N_tot_std[t - 1] +
+      beta1_wpupSurv_elkN * elk_N_female_std[t - 1] + # elk abundance
+      beta2_wpupSurv_bisonN * bison_N_std[t - 1] + # bison abundance
+      beta3_wpupSurv_wolfN * wolf_N_tot_std[t - 1] + # density dependence
       eps_wolf_s_p[t]
     
-    logit(wolf_s_a[t]) <-
+    # wolf adult regression
+    logit(wolf_s_a[t]) <- # adult survival depends on...
       beta0_wadSurv +
-      beta1_wadSurv_elkN * elk_N_female_std[t - 1] +
-      beta2_wadSurv_bisonN * bison_N_std[t - 1] +
-      beta3_wadSurv_wolfN * wolf_N_tot_std[t - 1] +
+      beta1_wadSurv_elkN * elk_N_female_std[t - 1] + # elk abundance
+      beta2_wadSurv_bisonN * bison_N_std[t - 1] + # bison abundance
+      beta3_wadSurv_wolfN * wolf_N_tot_std[t - 1] + # density dependence
       eps_wolf_s_a[t]
   }
 })
@@ -752,8 +845,8 @@ icm_data <- list(
   wintPPT = covars_std$winter_ppt_mm,
   bison_obs = bison$NR_Bison,
   griz_obs = grizzly$griz_N,
-  #elk_ya_Harvest = covars_std$age_2_13,
-  #elk_oa_Harvest = covars_std$age_14_plus
+  elk_ya_Harvest = covars$age_2_13,
+  elk_oa_Harvest = covars$age_14_plus
 )
 
 # initial values
