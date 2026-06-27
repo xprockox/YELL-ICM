@@ -16,7 +16,10 @@ library(parallel)
 
 wolf_range <- "full" # can be "NR" or "full"
 grizzly_range <- "elk_mcp" # can be "NR", "park", "elk_mcp", or "full"
-drop_regression_years <- 1995:1997
+drop_regression_years <- 1995:2000 
+# drop intial years because 
+# (a) they were heavily influenced by humans (esp. wolves) and 
+# (b) MODIS data only goes back to 2001; elk collar data also only goes back that far
 
 ################################################################################
 ################################## Helpers #####################################
@@ -221,8 +224,8 @@ wolf_a <- extract_marray_inputs(wolf_y, wolf_is_class2, "adult")
 ############################## Load covariates #################################
 ################################################################################
 
-# import prism data
-annual_prism <- read.csv("data/covariates/prism_annual_precip_tmean.csv")
+# import environmental covar data
+env_covars <- read.csv("data/covariates/environmental_covariates_annual.csv")
 
 # import bison obs & cull data
 bison <- read.csv("data/covariates/yellowstone_bison_culls_harvests_1970_2023.csv") %>%
@@ -285,7 +288,7 @@ elk_harvest <- tibble(year = community_years) %>%
   left_join(elk_harvest, by = "year")
 
 # combine all covars into same df
-covars <- annual_prism %>%
+covars <- env_covars %>%
   left_join(bison, by = "year") %>%
   left_join(grizzly, by = "year") %>%
   left_join(elk_harvest, by = "year") %>%
@@ -298,7 +301,7 @@ zscore_na <- function(x) {
 }
 
 covars_std <- covars %>%
-  mutate(across(-year, zscore_na))
+  mutate(across(-c(year, winter_severity), zscore_na)) # winter severity is already standardized
 
 ################################################################################
 ############################### NIMBLE model ###################################
@@ -663,6 +666,9 @@ icm_code <- nimbleCode({
   beta3_yaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
   #beta4_yaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   beta5_yaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
+  beta6_yaSurv_annualNpp ~ dnorm(0, 1 / 0.3^2)
+  beta7_yaSurv_browndown ~ dnorm(0, 1 / 0.3^2)
+  beta8_yaSurv_pdsi ~ dnorm(0, 1 / 0.3^2)
   
   # old adults
   beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2)
@@ -671,6 +677,9 @@ icm_code <- nimbleCode({
   beta3_oaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
   #beta4_oaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   beta5_oaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
+  beta6_oaSurv_annualNpp ~ dnorm(0, 1 / 0.3^2)
+  beta7_oaSurv_browndown ~ dnorm(0, 1 / 0.3^2)
+  beta8_oaSurv_pdsi ~ dnorm(0, 1 / 0.3^2)
   
   # error
   sigma_calf ~ dunif(0, 0.5)
@@ -760,6 +769,9 @@ icm_code <- nimbleCode({
       beta3_yaSurv_grizN * griz_N_std[t - 1] + # grizzly abundance
       #beta4_yaSurv_harvest * elk_ya_Harvest[t] + # harvest
       beta5_yaSurv_elkN * elk_N_female_std[t - 1] + # density dependence
+      beta6_yaSurv_annualNpp * annualNpp_std[t - 1] + # vegetation productivity
+      beta7_yaSurv_browndown * browndown_std[t - 1] + # brown-down date (growing season length)
+      beta8_yaSurv_pdsi * pdsi_std[t - 1] + # drought index
       eps_elk_s_ya[t] # error
     
     # elk old adult regression
@@ -770,6 +782,9 @@ icm_code <- nimbleCode({
       beta3_oaSurv_grizN * griz_N_std[t - 1] + # grizzly abundance
       #beta4_oaSurv_harvest * elk_oa_Harvest[t] + # harvest
       beta5_oaSurv_elkN * elk_N_female_std[t - 1] + # density dependence
+      beta6_oaSurv_annualNpp * annualNpp_std[t - 1] + # vegetation productivity
+      beta7_oaSurv_browndown * browndown_std[t - 1] + # brown-down date (growing season length)
+      beta8_oaSurv_pdsi * pdsi_std[t - 1] + # drought index
       eps_elk_s_oa[t] # error
     
     # wolf pup regression
@@ -843,10 +858,13 @@ icm_data <- list(
   wolf_rel_a = wolf_a$releases,
   # covars
   winterSeverity = covars_std$winter_severity,
+  annualNpp_std = covars_std$annual_npp,
+  browndown_std = covars_std$browndown_onset_greenness_min,
+  pdsi_std = covars_std$summer_avg_pdsi,
   bison_obs = bison$NR_Bison,
   griz_obs = grizzly$griz_N,
-  elk_ya_Harvest = covars$age_2_13,
-  elk_oa_Harvest = covars$age_14_plus
+  elk_ya_harvest = covars$age_2_13,
+  elk_oa_harvest = covars$age_14_plus
 )
 
 # initial values
@@ -975,6 +993,9 @@ make_icm_inits <- function() {
     beta3_yaSurv_grizN = 0,
     #beta4_yaSurv_harvest = 0,
     beta5_yaSurv_elkN = 0,
+    beta6_yaSurv_annualNpp = 0, 
+    beta7_yaSurv_browndown = 0, 
+    beta8_yaSurv_pdsi = 0,
     
     beta0_oaSurv = qlogis(0.80),
     beta1_oaSurv_wolfN = 0,
@@ -982,6 +1003,9 @@ make_icm_inits <- function() {
     beta3_oaSurv_grizN = 0,
     #beta4_oaSurv_harvest = 0,
     beta5_oaSurv_elkN = 0,
+    beta6_oaSurv_annualNpp = 0, 
+    beta7_oaSurv_browndown = 0, 
+    beta8_oaSurv_pdsi = 0,
     
     sigma_calf = 0.1,
     sigma_ya = 0.1,
@@ -1029,10 +1053,19 @@ icm_params <- c(
   # elk survival regression covariates
   "beta0_calfSurv", "beta1_calfSurv_wolfN", "beta2_calfSurv_winterSeverity", "beta3_calfSurv_grizN",# "beta4_calfSurv_harvest", 
   "beta5_calfSurv_elkN",
+  
   "beta0_yaSurv", "beta1_yaSurv_wolfN", "beta2_yaSurv_winterSeverity", "beta3_yaSurv_grizN", #"beta4_yaSurv_harvest", 
   "beta5_yaSurv_elkN",
+  'beta6_yaSurv_annualNpp', 
+  'beta7_yaSurv_browndown',
+  'beta8_yaSurv_pdsi',
+  
   "beta0_oaSurv", "beta1_oaSurv_wolfN", "beta2_oaSurv_winterSeverity", "beta3_oaSurv_grizN", #"beta4_oaSurv_harvest", 
   "beta5_oaSurv_elkN",
+  'beta6_oaSurv_annualNpp', 
+  'beta7_oaSurv_browndown',
+  'beta8_oaSurv_pdsi',
+  
   # elk errors
   "sigma_calf", "sigma_ya", "sigma_oa", "eps_elk_s_c", "eps_elk_s_ya", "eps_elk_s_oa",
   # wolf survival regression covariates
@@ -1189,7 +1222,7 @@ save(
   icm_constants,
   run_time,
   drop_regression_years,
-  file = "data/outputs/ICM_parallel_output_2026-06-22.RData"
+  file = "data/outputs/ICM_parallel_output_2026-06-27.RData"
 )
 ################################################################################
 ################################################################################
