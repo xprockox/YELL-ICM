@@ -1196,6 +1196,11 @@ chain_samples <- parLapply(cl, 1:nc, function(chain_id) {
 # this is important so background worker processes don't remain open
 stopCluster(cl)
 
+# stamp model end time and calculate total run time
+end_time <- Sys.time()
+run_time <- end_time - start_time
+print(paste0("Model runtime: ", round(run_time, 2), " ", units(run_time)))
+
 # combine list of individual chain outputs into one mcmc.list object
 # (req. for MCMCsummary() to work later)
 icm_samples <- mcmc.list(chain_samples)
@@ -1215,11 +1220,6 @@ icm_samples_clean <- mcmc.list(lapply(chain_samples, function(ch) {
 # summarize posterior distributions across the cleaned chains
 # returns means, credible intervals, Rhat, and ESS
 icm_summary <- MCMCsummary(icm_samples_clean)
-
-# stamp model end time and calculate total run time
-end_time <- Sys.time()
-run_time <- end_time - start_time
-print(paste0("Model runtime: ", round(run_time, 2), " ", units(run_time)))
 
 # write data
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
