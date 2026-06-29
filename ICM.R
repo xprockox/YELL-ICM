@@ -16,10 +16,12 @@ library(parallel)
 
 wolf_range <- "full" # can be "NR" or "full"
 grizzly_range <- "elk_mcp" # can be "NR", "park", "elk_mcp", or "full"
-drop_regression_years <- 1995:2000 
-# drop intial years because 
-# (a) they were heavily influenced by humans (esp. wolves) and 
-# (b) MODIS data only goes back to 2001; elk collar data also only goes back that far
+drop_regression_years <- 1995:2001
+# drop intial years 95-01 because 
+# (a) years 1995-1997 were heavily influenced by humans (esp. wolves) 
+# (b) MODIS data only goes back to 2001
+# (c) elk collar data only goes back to 2001
+# (c) MODIS data is lagged in regressions, so the 2002 regressions rely on 2001 data
 
 ################################################################################
 ################################## Helpers #####################################
