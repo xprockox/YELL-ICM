@@ -346,13 +346,13 @@ icm_code <- nimbleCode({
     
     elk_mu_ya[t + 1] <- # young adults in year t + 1 are comprised of...
       elk_s_ya[t] * elk_N_1y[t] + # yearlings that survived
-      elk_s_ya[t] * (1 - elk_p_13[t]) * elk_N_ya[t] #- # plus young adults that survived and did not transition to old adults
-      #elk_ya_harvest[t] # minus the number of young adults harvested
+      elk_s_ya[t] * (1 - elk_p_13[t]) * elk_N_ya[t] - # plus young adults that survived and did not transition to old adults
+      elk_ya_harvest[t] # minus the number of young adults harvested
     
     elk_mu_oa[t + 1] <- # old adults in year t + 1 are comprised of...
       elk_s_ya[t] * elk_p_13[t] * elk_N_ya[t] + # young adults that survived and transitioned
-      elk_s_oa[t] * elk_N_oa[t] #- # plus old adults that survived
-      #elk_oa_harvest[t] # minus the number of old adults harvested
+      elk_s_oa[t] * elk_N_oa[t] - # plus old adults that survived
+      elk_oa_harvest[t] # minus the number of old adults harvested
     
     # demographic stochasticity (actual numbers differ from expected)
     elk_N_1y[t + 1] ~ dpois(max(1e-6, elk_mu_1y[t + 1]))
@@ -658,15 +658,12 @@ icm_code <- nimbleCode({
   beta1_calfSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_calfSurv_winterSeverity ~ dnorm(0, 1 / 0.3^2)
   beta3_calfSurv_grizN ~ dnorm(0, 1 / 0.3^2)
-  #beta4_calfSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   beta5_calfSurv_elkN ~ dnorm(0, 1 / 0.3^2)  
 
   # young adults
   beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2)
   beta1_yaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_yaSurv_winterSeverity ~ dnorm(0, 1 / 0.3^2)
-  #beta3_yaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
-  #beta4_yaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   beta5_yaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   beta6_yaSurv_annualNpp ~ dnorm(0, 1 / 0.3^2)
   beta7_yaSurv_browndown ~ dnorm(0, 1 / 0.3^2)
@@ -676,8 +673,6 @@ icm_code <- nimbleCode({
   beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2)
   beta1_oaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_oaSurv_winterSeverity ~ dnorm(0, 1 / 0.3^2)
-  #beta3_oaSurv_grizN ~ dnorm(0, 1 / 0.3^2)
-  #beta4_oaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   beta5_oaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   beta6_oaSurv_annualNpp ~ dnorm(0, 1 / 0.3^2)
   beta7_oaSurv_browndown ~ dnorm(0, 1 / 0.3^2)
@@ -759,7 +754,6 @@ icm_code <- nimbleCode({
       beta1_calfSurv_wolfN * wolf_N_tot_std[t - 1] + # wolf abundance
       beta2_calfSurv_winterSeverity * winterSeverity[t] + # winter precipitation
       beta3_calfSurv_grizN * griz_N_std[t - 1] + # grizzly abundance
-      #beta4_calfSurv_harvest * elk_1y_Harvest[t] + # harvest
       beta5_calfSurv_elkN * elk_N_female_std[t - 1] + # density dependence
       eps_elk_s_c[t] # error
     
@@ -768,8 +762,6 @@ icm_code <- nimbleCode({
       beta0_yaSurv +
       beta1_yaSurv_wolfN * wolf_N_tot_std[t - 1] + # wolf abundance
       beta2_yaSurv_winterSeverity * winterSeverity[t] + # winter precipitation
-      #beta3_yaSurv_grizN * griz_N_std[t - 1] + # grizzly abundance
-      #beta4_yaSurv_harvest * elk_ya_Harvest[t] + # harvest
       beta5_yaSurv_elkN * elk_N_female_std[t - 1] + # density dependence
       beta6_yaSurv_annualNpp * annualNpp_std[t - 1] + # vegetation productivity
       beta7_yaSurv_browndown * browndown_std[t - 1] + # brown-down date (growing season length)
@@ -781,8 +773,6 @@ icm_code <- nimbleCode({
       beta0_oaSurv +
       beta1_oaSurv_wolfN * wolf_N_tot_std[t - 1] + # wolf abundance
       beta2_oaSurv_winterSeverity * winterSeverity[t] + # winter precipitation
-      #beta3_oaSurv_grizN * griz_N_std[t - 1] + # grizzly abundance
-      #beta4_oaSurv_harvest * elk_oa_Harvest[t] + # harvest
       beta5_oaSurv_elkN * elk_N_female_std[t - 1] + # density dependence
       beta6_oaSurv_annualNpp * annualNpp_std[t - 1] + # vegetation productivity
       beta7_oaSurv_browndown * browndown_std[t - 1] + # brown-down date (growing season length)
@@ -864,9 +854,9 @@ icm_data <- list(
   browndown_std = covars_std$browndown_onset_greenness_min,
   pdsi_std = covars_std$summer_avg_pdsi,
   bison_obs = bison$NR_Bison,
-  griz_obs = grizzly$griz_N#,
-  #elk_ya_harvest = covars$age_2_13,
-  #elk_oa_harvest = covars$age_14_plus
+  griz_obs = grizzly$griz_N,
+  elk_ya_harvest = covars$age_2_13,
+  elk_oa_harvest = covars$age_14_plus
 )
 
 # initial values
@@ -986,14 +976,11 @@ make_icm_inits <- function() {
     beta1_calfSurv_wolfN = 0,
     beta2_calfSurv_winterSeverity = 0,
     beta3_calfSurv_grizN = 0,
-    #beta4_calfSurv_harvest = 0,
     beta5_calfSurv_elkN = 0,
     
     beta0_yaSurv = qlogis(0.90),
     beta1_yaSurv_wolfN = 0,
     beta2_yaSurv_winterSeverity = 0,
-    #beta3_yaSurv_grizN = 0,
-    #beta4_yaSurv_harvest = 0,
     beta5_yaSurv_elkN = 0,
     beta6_yaSurv_annualNpp = 0, 
     beta7_yaSurv_browndown = 0, 
@@ -1002,8 +989,6 @@ make_icm_inits <- function() {
     beta0_oaSurv = qlogis(0.80),
     beta1_oaSurv_wolfN = 0,
     beta2_oaSurv_winterSeverity = 0,
-    #beta3_oaSurv_grizN = 0,
-    #beta4_oaSurv_harvest = 0,
     beta5_oaSurv_elkN = 0,
     beta6_oaSurv_annualNpp = 0, 
     beta7_oaSurv_browndown = 0, 
@@ -1052,19 +1037,17 @@ icm_params <- c(
   "bison_N", "bison_logN", "bison_mu",
   "bison_sigma_obs", "bison_sigma_proc",
   "beta1_bison_cull",
+  
   # elk survival regression covariates
   "beta0_calfSurv", 
   "beta1_calfSurv_wolfN", 
   "beta2_calfSurv_winterSeverity", 
   "beta3_calfSurv_grizN",
-  #"beta4_calfSurv_harvest", 
   "beta5_calfSurv_elkN",
   
   "beta0_yaSurv", 
   "beta1_yaSurv_wolfN", 
   "beta2_yaSurv_winterSeverity", 
-  #"beta3_yaSurv_grizN", 
-  #"beta4_yaSurv_harvest", 
   "beta5_yaSurv_elkN",
   'beta6_yaSurv_annualNpp', 
   'beta7_yaSurv_browndown',
@@ -1073,8 +1056,6 @@ icm_params <- c(
   "beta0_oaSurv", 
   "beta1_oaSurv_wolfN", 
   "beta2_oaSurv_winterSeverity", 
-  #"beta3_oaSurv_grizN", 
-  #"beta4_oaSurv_harvest", 
   "beta5_oaSurv_elkN",
   'beta6_oaSurv_annualNpp', 
   'beta7_oaSurv_browndown',
@@ -1082,9 +1063,18 @@ icm_params <- c(
   
   # elk errors
   "sigma_calf", "sigma_ya", "sigma_oa", "eps_elk_s_c", "eps_elk_s_ya", "eps_elk_s_oa",
+  
   # wolf survival regression covariates
-  "beta0_wpupSurv", "beta1_wpupSurv_elkN", "beta2_wpupSurv_bisonN", "beta3_wpupSurv_wolfN",
-  "beta0_wadSurv", "beta1_wadSurv_elkN", "beta2_wadSurv_bisonN", "beta3_wadSurv_wolfN",
+  "beta0_wpupSurv", 
+  "beta1_wpupSurv_elkN", 
+  "beta2_wpupSurv_bisonN", 
+  "beta3_wpupSurv_wolfN",
+  
+  "beta0_wadSurv", 
+  "beta1_wadSurv_elkN", 
+  "beta2_wadSurv_bisonN", 
+  "beta3_wadSurv_wolfN",
+  
   # wolf errors
   "sigma_wpup", "sigma_wad", "eps_wolf_s_p", "eps_wolf_s_a"
 )
