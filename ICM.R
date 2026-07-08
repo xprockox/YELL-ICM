@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Combines elk IPM + wolf IPM in one NIMBLE model
-### Last updated: June 29, 2026
+### Last updated: July 8, 2026
 
 ################################################################################
 ############################ Packages and settings #############################
@@ -289,11 +289,24 @@ elk_harvest <- read.csv("data/covariates/annual_elk_harvest.csv") %>%
 elk_harvest <- tibble(year = community_years) %>%
   left_join(elk_harvest, by = "year")
 
+# import cougar data
+cougars <- read.csv('data/allSpp_Abundances.csv') %>%
+  select(Year, Cougars) %>%
+  rename(
+    year = Year,
+    cougar_N = Cougars
+  )
+
+cougars <- tibble(year = community_years) %>%
+  left_join(cougars, by = "year")
+
+
 # combine all covars into same df
 covars <- env_covars %>%
   left_join(bison, by = "year") %>%
   left_join(grizzly, by = "year") %>%
   left_join(elk_harvest, by = "year") %>%
+  left_join(cougars, by = 'year') %>%
   filter(year %in% community_years) %>%
   arrange(match(year, community_years))
 
@@ -346,13 +359,13 @@ icm_code <- nimbleCode({
     
     elk_mu_ya[t + 1] <- # young adults in year t + 1 are comprised of...
       elk_s_ya[t] * elk_N_1y[t] + # yearlings that survived
-      elk_s_ya[t] * (1 - elk_p_13[t]) * elk_N_ya[t] - # plus young adults that survived and did not transition to old adults
-      elk_ya_harvest[t] # minus the number of young adults harvested
+      elk_s_ya[t] * (1 - elk_p_13[t]) * elk_N_ya[t] #- # plus young adults that survived and did not transition to old adults
+      #elk_ya_harvest[t] # minus the number of young adults harvested
     
     elk_mu_oa[t + 1] <- # old adults in year t + 1 are comprised of...
       elk_s_ya[t] * elk_p_13[t] * elk_N_ya[t] + # young adults that survived and transitioned
-      elk_s_oa[t] * elk_N_oa[t] - # plus old adults that survived
-      elk_oa_harvest[t] # minus the number of old adults harvested
+      elk_s_oa[t] * elk_N_oa[t] #- # plus old adults that survived
+      #elk_oa_harvest[t] # minus the number of old adults harvested
     
     # demographic stochasticity (actual numbers differ from expected)
     elk_N_1y[t + 1] ~ dpois(max(1e-6, elk_mu_1y[t + 1]))
@@ -648,6 +661,54 @@ icm_code <- nimbleCode({
   # beta3_bison_x3 ~ dnorm(0, 1 / 0.3^2)
   
   ###############################################################
+  ######### ------------- COUGAR SUBMODEL ------------- #########
+  ###############################################################
+  
+  # latent cougar abundance the first year (norm dist with mean = overall mean obs), 
+  # just helps model get started
+  cougar_logN[1] ~ dnorm(cougar_logN_init_mean, 1 / 0.5^2)  
+  
+  # state-space 
+  for (t in 2:n_years) {
+    
+    # for now, expected abundance in year t depends on abundance in year t - 1 + some effect of elk total abundance
+    cougar_mu[t] <-
+      cougar_logN[t - 1] +
+      beta1_cougar_elk * log(elk_N_female[t - 1] + 1e-6)# + 
+    #   beta2_cougar_x2 * cougar_x2_std[t - 1] +
+    #   beta3_cougar_x3 * cougar_x3_std[t - 1] # leaving these to make it easier to add more covariates as needed
+    
+    cougar_logN[t] ~ dnorm(cougar_mu[t], cougar_tau_proc)
+  }
+  
+  # convert latent log-abundance back to natural scale
+  for (t in 1:n_years) {
+    cougar_N[t] <- exp(cougar_logN[t])
+  }
+  
+  # observation error prior
+  cougar_sigma_obs ~ dunif(0.05, 2)
+  cougar_tau_obs <- 1 / (cougar_sigma_obs^2)
+  
+  for (t in 1:n_years) {
+    cougar_obs[t] ~ dlnorm(cougar_logN[t], cougar_tau_obs)
+  }
+  
+  # process error prior
+  cougar_sigma_proc ~ dunif(0.01, 1)
+  cougar_tau_proc <- 1 / (cougar_sigma_proc^2)
+  
+  # standardize cougar abundance for use in wolf regressions
+  for (t in 1:n_years) {
+    cougar_N_std[t] <- (cougar_N[t] - cougar_N_mean) / cougar_N_sd
+  }
+  
+  # priors for cougar process covariates (uncomment as added)
+  beta1_cougar_elk ~ dnorm(0, 1 / 1^2)
+  # beta2_cougar_x2 ~ dnorm(0, 1 / 0.3^2)
+  # beta3_cougar_x3 ~ dnorm(0, 1 / 0.3^2)
+  
+  ###############################################################
   ###### ------- ELK AND WOLF SURVIVAL REGRESSIONS ------- ######
   ###############################################################
   
@@ -658,12 +719,14 @@ icm_code <- nimbleCode({
   beta1_calfSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_calfSurv_winterSeverity ~ dnorm(0, 1 / 0.3^2)
   beta3_calfSurv_grizN ~ dnorm(0, 1 / 0.3^2)
+  beta4_calfSurv_cougarN ~ dnorm(0, 1 / 0.3^2)
   beta5_calfSurv_elkN ~ dnorm(0, 1 / 0.3^2)  
 
   # young adults
   beta0_yaSurv ~ dnorm(qlogis(0.90), 1 / 0.3^2)
   beta1_yaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_yaSurv_winterSeverity ~ dnorm(0, 1 / 0.3^2)
+  beta4_yaSurv_cougarN ~ dnorm(0, 1 / 0.3^2)
   beta5_yaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   beta6_yaSurv_annualNpp ~ dnorm(0, 1 / 0.3^2)
   beta7_yaSurv_browndown ~ dnorm(0, 1 / 0.3^2)
@@ -673,6 +736,7 @@ icm_code <- nimbleCode({
   beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2)
   beta1_oaSurv_wolfN ~ dnorm(0, 1 / 0.3^2)
   beta2_oaSurv_winterSeverity ~ dnorm(0, 1 / 0.3^2)
+  beta4_oaSurv_cougarN ~ dnorm(0, 1 / 0.3^2)
   beta5_oaSurv_elkN ~ dnorm(0, 1 / 0.3^2)
   beta6_oaSurv_annualNpp ~ dnorm(0, 1 / 0.3^2)
   beta7_oaSurv_browndown ~ dnorm(0, 1 / 0.3^2)
@@ -754,6 +818,7 @@ icm_code <- nimbleCode({
       beta1_calfSurv_wolfN * wolf_N_tot_std[t - 1] + # wolf abundance
       beta2_calfSurv_winterSeverity * winterSeverity[t] + # winter precipitation
       beta3_calfSurv_grizN * griz_N_std[t - 1] + # grizzly abundance
+      beta4_calfSurv_cougarN * cougar_N_std[t - 1] + # cougar abundance
       beta5_calfSurv_elkN * elk_N_female_std[t - 1] + # density dependence
       eps_elk_s_c[t] # error
     
@@ -762,6 +827,7 @@ icm_code <- nimbleCode({
       beta0_yaSurv +
       beta1_yaSurv_wolfN * wolf_N_tot_std[t - 1] + # wolf abundance
       beta2_yaSurv_winterSeverity * winterSeverity[t] + # winter precipitation
+      beta4_yaSurv_cougarN * cougar_N_std[t - 1] + # cougar abundance
       beta5_yaSurv_elkN * elk_N_female_std[t - 1] + # density dependence
       beta6_yaSurv_annualNpp * annualNpp_std[t - 1] + # vegetation productivity
       beta7_yaSurv_browndown * browndown_std[t - 1] + # brown-down date (growing season length)
@@ -773,6 +839,7 @@ icm_code <- nimbleCode({
       beta0_oaSurv +
       beta1_oaSurv_wolfN * wolf_N_tot_std[t - 1] + # wolf abundance
       beta2_oaSurv_winterSeverity * winterSeverity[t] + # winter precipitation
+      beta4_oaSurv_cougarN * cougar_N_std[t - 1] + # cougar abundance
       beta5_oaSurv_elkN * elk_N_female_std[t - 1] + # density dependence
       beta6_oaSurv_annualNpp * annualNpp_std[t - 1] + # vegetation productivity
       beta7_oaSurv_browndown * browndown_std[t - 1] + # brown-down date (growing season length)
@@ -820,7 +887,11 @@ icm_constants <- list(
   bison_N_mean = mean(bison$NR_Bison, na.rm = TRUE),
   bison_N_sd = sd(bison$NR_Bison, na.rm = TRUE),
   bison_logN_init_mean = log(bison$NR_Bison[which(!is.na(bison$NR_Bison))[1]]),
-  bison_culled = bison$total_cull_harvest
+  bison_culled = bison$total_cull_harvest,
+  # cougars
+  cougar_N_mean = mean(cougars$cougar_N, na.rm = TRUE),
+  cougar_N_sd = sd(cougars$cougar_N, na.rm = TRUE),
+  cougar_logN_init_mean = log(pmax(1, cougars$cougar_N[which(!is.na(cougars$cougar_N))[1]]))
 )
 
 # data
@@ -855,8 +926,9 @@ icm_data <- list(
   pdsi_std = covars_std$summer_avg_pdsi,
   bison_obs = bison$NR_Bison,
   griz_obs = grizzly$griz_N,
-  elk_ya_harvest = covars$age_2_13,
-  elk_oa_harvest = covars$age_14_plus
+  cougar_obs = cougars$cougar_N
+  # elk_ya_harvest = covars$age_2_13,
+  # elk_oa_harvest = covars$age_14_plus
 )
 
 # initial values
@@ -879,6 +951,7 @@ elk_init_Noa <- ifelse(
 )
 
 wolf_summer_pups <- wolf_pop$summer_pups
+
 wolf_init_Ntot <- ifelse(
   is.na(wolf_pop$total_abundance),
   max(1, round(mean(wolf_pop$total_abundance, na.rm = TRUE))),
@@ -899,12 +972,6 @@ wolf_init_Np_bio[1] <- 0
 
 wolf_init_Na <- pmax(1, round(wolf_init_Ntot - wolf_init_Np))
 
-griz_init_logN <- log(pmax(1, ifelse(
-  is.na(grizzly$griz_N),
-  mean(grizzly$griz_N, na.rm = TRUE),
-  grizzly$griz_N
-)))
-
 make_icm_inits <- function() {
   
   bison_init_logN <- log(pmax(1, ifelse(
@@ -917,6 +984,12 @@ make_icm_inits <- function() {
     is.na(grizzly$griz_N),
     mean(grizzly$griz_N, na.rm = TRUE),
     grizzly$griz_N
+  )))
+  
+  cougar_init_logN <- log(pmax(1, ifelse(
+    is.na(cougars$cougar_N),
+    mean(cougars$cougar_N, na.rm = TRUE),
+    cougars$cougar_N
   )))
   
   griz_obs_init <- ifelse(
@@ -971,16 +1044,24 @@ make_icm_inits <- function() {
     bison_sigma_proc = 0.1,
     beta1_bison_cull = 0,
     
+    # cougar abundances
+    cougar_logN = cougar_init_logN,
+    cougar_sigma_obs = 0.2,
+    cougar_sigma_proc = 0.1,
+    beta1_cougar_elk = 0,
+    
     # elk survival covariates
     beta0_calfSurv = qlogis(0.22),
     beta1_calfSurv_wolfN = 0,
     beta2_calfSurv_winterSeverity = 0,
     beta3_calfSurv_grizN = 0,
+    beta4_calfSurv_cougarN = 0,
     beta5_calfSurv_elkN = 0,
     
     beta0_yaSurv = qlogis(0.90),
     beta1_yaSurv_wolfN = 0,
     beta2_yaSurv_winterSeverity = 0,
+    beta4_yaSurv_cougarN = 0,
     beta5_yaSurv_elkN = 0,
     beta6_yaSurv_annualNpp = 0, 
     beta7_yaSurv_browndown = 0, 
@@ -989,6 +1070,7 @@ make_icm_inits <- function() {
     beta0_oaSurv = qlogis(0.80),
     beta1_oaSurv_wolfN = 0,
     beta2_oaSurv_winterSeverity = 0,
+    beta4_oaSurv_cougarN = 0,
     beta5_oaSurv_elkN = 0,
     beta6_oaSurv_annualNpp = 0, 
     beta7_oaSurv_browndown = 0, 
@@ -1037,17 +1119,23 @@ icm_params <- c(
   "bison_N", "bison_logN", "bison_mu",
   "bison_sigma_obs", "bison_sigma_proc",
   "beta1_bison_cull",
+  # cougar abundances and vars for state-space
+  "cougar_N", "cougar_logN", "cougar_mu",
+  "cougar_sigma_obs", "cougar_sigma_proc",
+  "beta1_cougar_elk", "cougar_N_std",
   
   # elk survival regression covariates
   "beta0_calfSurv", 
   "beta1_calfSurv_wolfN", 
   "beta2_calfSurv_winterSeverity", 
   "beta3_calfSurv_grizN",
+  "beta4_calfSurv_cougarN",
   "beta5_calfSurv_elkN",
   
   "beta0_yaSurv", 
   "beta1_yaSurv_wolfN", 
   "beta2_yaSurv_winterSeverity", 
+  "beta4_yaSurv_cougarN",
   "beta5_yaSurv_elkN",
   'beta6_yaSurv_annualNpp', 
   'beta7_yaSurv_browndown',
@@ -1056,6 +1144,7 @@ icm_params <- c(
   "beta0_oaSurv", 
   "beta1_oaSurv_wolfN", 
   "beta2_oaSurv_winterSeverity", 
+  "beta4_oaSurv_cougarN",
   "beta5_oaSurv_elkN",
   'beta6_oaSurv_annualNpp', 
   'beta7_oaSurv_browndown',
@@ -1162,7 +1251,8 @@ clusterExport(
     "wolf_init_Np_bio",
     "wolf_init_Na",
     "grizzly",
-    "bison"
+    "bison",
+    "cougars"
   ),
   envir = environment()
 )
@@ -1222,11 +1312,12 @@ save(
   wolf_pop,
   grizzly,
   bison,
+  cougars,
   covars,
   icm_constants,
   run_time,
   drop_regression_years,
-  file = "data/outputs/ICM_parallel_output_2026-06-29.RData"
+  file = "data/outputs/ICM_parallel_output_2026-07-08.RData"
 )
 ################################################################################
 ################################################################################
