@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Results exploration
-### Last updated: June 16, 2026
+### Last updated: July 9, 2026
 ### xprockox@gmail.com
 
 ################################################################################
@@ -19,7 +19,7 @@ library(stringr)
 ################################################################################
 
 # load model results
-load("data/outputs/ICM_parallel_output_2026-06-29.RData")
+load("data/outputs/ICM_parallel_output_2026-07-08.RData")
 
 # import elk data
 elk_dat_n <- read.csv("data/elk_abundanceEstimates_stages.csv")
@@ -95,11 +95,13 @@ pretty_coef_labels <- c(
   beta1_calfSurv_wolfN = "Calf survival wolf effect",
   beta2_calfSurv_winterSeverity = "Calf survival winter severity effect",
   beta3_calfSurv_grizN = "Calf survival grizzly effect",
+  beta4_calfSurv_cougarN = 'Calf survival cougar effect',
   beta5_calfSurv_elkN = "Calf survival density dependence effect",
   
   beta0_yaSurv = "YA survival intercept",
   beta1_yaSurv_wolfN = "YA survival wolf effect",
   beta2_yaSurv_winterSeverity = "YA survival winter severity effect",
+  beta4_yaSurv_cougarN = 'YA survival cougar effect',
   beta5_yaSurv_elkN = "YA survival density dependence effect",
   beta6_yaSurv_annualNpp = "YA survival annual NPP effect",
   beta7_yaSurv_browndown = "YA survival browndown effect",
@@ -108,6 +110,7 @@ pretty_coef_labels <- c(
   beta0_oaSurv = "OA survival intercept",
   beta1_oaSurv_wolfN = "OA survival wolf effect",
   beta2_oaSurv_winterSeverity = "OA survival winter severity effect",
+  beta4_oaSurv_cougarN = 'OA survival cougar effect',
   beta5_oaSurv_elkN = "OA survival density dependence effect",
   beta6_oaSurv_annualNpp = "OA survival annual NPP effect",
   beta7_oaSurv_browndown = "OA survival browndown effect",
@@ -124,7 +127,8 @@ pretty_coef_labels <- c(
   beta3_wadSurv_wolfN = "Wolf adult survival density dependence effect",
   
   beta1_griz_elkCalves = "Grizzly elk calves effect",
-  beta1_bison_cull = 'Bison cull/harvest effect'
+  beta1_bison_cull = 'Bison cull/harvest effect',
+  beta1_cougar_elk = 'Cougar elk effect'
 )
 
 ################################################################################
@@ -360,6 +364,13 @@ bison_N_summ <- extract_abundance_summary(
   stage_map = c(bison_N = "NR bison abundance")
 )
 
+cougar_N_summ <- extract_abundance_summary(
+  icm_clean,
+  params = "cougar_N",
+  years = community_years,
+  stage_map = c(cougar_N = "Cougar abundance")
+)
+
 elk_vrates2 <- extract_indexed_summary(
   icm_clean,
   params = c("elk_s_c", "elk_s_ya", "elk_s_oa", "elk_p_13", "elk_f_ya", "elk_f_oa"),
@@ -388,9 +399,30 @@ bison_logN_summ <- extract_indexed_summary(
   years = community_years
 )
 
+cougar_logN_summ <- extract_indexed_summary(
+    icm_clean,
+    params = "cougar_logN",
+    years = community_years
+  ) %>%
+  filter(year %in% community_years[-1])
+
+griz_mu_summ <- extract_indexed_summary(
+  icm_clean,
+  params = "griz_mu",
+  years = community_years
+) %>%
+  filter(year %in% community_years[-1])
+
 bison_mu_summ <- extract_indexed_summary(
   icm_clean,
   params = "bison_mu",
+  years = community_years
+) %>%
+  filter(year %in% community_years[-1])
+
+cougar_mu_summ <- extract_indexed_summary(
+  icm_clean,
+  params = "cougar_mu",
   years = community_years
 ) %>%
   filter(year %in% community_years[-1])
@@ -425,18 +457,25 @@ bison_coef_rhat <- get_rhat_issues(MCMCsummary(
   params = "beta1_bison_cull"
 ))
 
+cougar_coef_rhat <- get_rhat_issues(MCMCsummary(
+  icm_clean,
+  params = 'beta1_cougar_elk'
+))
+
 reg_coef_rhat <- get_rhat_issues(MCMCsummary(
   icm_clean,
   params = c(
     "beta0_calfSurv", 
     "beta1_calfSurv_wolfN", 
     "beta2_calfSurv_winterSeverity", 
+    "beta4_calfSurv_cougarN",
     "beta3_calfSurv_grizN", 
     "beta5_calfSurv_elkN",
     
     "beta0_yaSurv", 
     "beta1_yaSurv_wolfN",
     "beta2_yaSurv_winterSeverity", 
+    "beta4_yaSurv_cougarN",
     "beta5_yaSurv_elkN",
     "beta6_yaSurv_annualNpp", 
     "beta7_yaSurv_browndown", 
@@ -445,6 +484,7 @@ reg_coef_rhat <- get_rhat_issues(MCMCsummary(
     "beta0_oaSurv", 
     "beta1_oaSurv_wolfN", 
     "beta2_oaSurv_winterSeverity", 
+    "beta4_oaSurv_cougarN",
     "beta5_oaSurv_elkN",
     "beta6_oaSurv_annualNpp", 
     "beta7_oaSurv_browndown", 
@@ -468,6 +508,7 @@ wolf_N_rhat
 wolf_vrate_rhat
 griz_coef_rhat
 bison_coef_rhat
+cougar_coef_rhat
 reg_coef_rhat
 
 ################################################################################
@@ -512,6 +553,14 @@ griz_obs_long <- make_observed_long(
   )
 )
 
+cougar_obs_long <- make_observed_long(
+  cougars,
+  year_col = 'year',
+  cols_map = c(
+    cougar_N = "Cougar abundance"
+  )
+)
+
 elk_validation_plot <- plot_validation(
   elk_N_summ,
   elk_obs_long,
@@ -537,6 +586,12 @@ bison_validation_plot <- plot_validation(
   title = "Bison posterior abundance estimates with observed data"
 )
 
+cougar_validation_plot <- plot_validation(
+  cougar_N_summ,
+  cougar_obs_long,
+  title = 'Cougar posterior abundance estimates with observed data'
+)  
+
 elk_vrate_plot <- plot_vital_rates(
   elk_vrates2,
   title = "Elk posterior time-varying vital rates (95% credible intervals)"
@@ -552,6 +607,8 @@ elk_validation_plot
 wolf_validation_plot
 griz_validation_plot
 bison_validation_plot
+cougar_validation_plot
+
 elk_vrate_plot
 wolf_vrate_plot
 
@@ -614,12 +671,24 @@ bison_cull_pts <- covars %>%
   filter(year %in% regression_years) %>%
   select(year, total_cull_harvest)
 
-# create plotting dataframe for elk survival
+# cougar abundance points
+cougar_pts <- summarize_indexed_draws(post_mat, "cougar_N", community_years, "cougar_N") %>%
+  filter(year %in% regression_years) %>%
+  rename(cougar_low = low, cougar_high = high)
 
+# elk abundance points for cougar state-space
+elk_cougar_pts <- summarize_indexed_draws(
+  post_mat, "elk_N_female", community_years, "elk_N_female"
+) %>%
+  filter(year %in% community_years[-length(community_years)]) %>%
+  rename(x_low = low, x_high = high)
+
+# create plotting dataframe for elk survival
 plot_df_elk <- elk_surv_pts %>%
   left_join(wolf_pts_elk, by = "year") %>%
   left_join(elk_abund_pts, by = "year") %>%
   left_join(griz_pts, by = "year") %>%
+  left_join(cougar_pts, by = "year") %>%
   left_join(
     covars %>%
       filter(year %in% regression_years) %>%
@@ -660,6 +729,7 @@ elk_model_specs <- list(
       wolf_N_tot = "beta1_calfSurv_wolfN",
       winter_severity = "beta2_calfSurv_winterSeverity",
       griz_N = "beta3_calfSurv_grizN",
+      cougar_N = "beta4_calfSurv_cougarN",
       elk_N_female = "beta5_calfSurv_elkN"
     )
   ),
@@ -668,6 +738,7 @@ elk_model_specs <- list(
     terms = c(
       wolf_N_tot = "beta1_yaSurv_wolfN",
       winter_severity = "beta2_yaSurv_winterSeverity",
+      cougar_N = "beta4_yaSurv_cougarN",
       elk_N_female = "beta5_yaSurv_elkN",
       annual_npp = "beta6_yaSurv_annualNpp",
       browndown_onset_greenness_min = "beta7_yaSurv_browndown",
@@ -679,6 +750,7 @@ elk_model_specs <- list(
     terms = c(
       wolf_N_tot = "beta1_oaSurv_wolfN",
       winter_severity = "beta2_oaSurv_winterSeverity",
+      cougar_N = "beta4_oaSurv_cougarN",
       elk_N_female = "beta5_oaSurv_elkN",
       annual_npp = "beta6_oaSurv_annualNpp",
       browndown_onset_greenness_min = "beta7_oaSurv_browndown",
@@ -778,6 +850,15 @@ predictor_specs <- list(
     xmin = NULL,
     xmax = NULL,
     label = "Bison abundance"
+  ),
+  cougar_N = list(
+    raw_col = "cougar_N",
+    raw_df = cougar_pts,
+    std_fun = function(x) (x - icm_constants$cougar_N_mean) / icm_constants$cougar_N_sd,
+    held_value = 0,
+    xmin = "cougar_low",
+    xmax = "cougar_high",
+    label = "Cougar abundance"
   )
 )
 
@@ -909,6 +990,26 @@ make_griz_elkCalf_effect_curve <- function(post_mat, calf_vals, ref_val = NULL) 
   )
 }
 
+make_cougar_elk_effect_curve <- function(post_mat, elk_vals, ref_val = NULL) {
+  beta_draws <- post_mat[, "beta1_cougar_elk", drop = TRUE]
+  
+  if (is.null(ref_val)) {
+    ref_val <- median(elk_vals, na.rm = TRUE)
+  }
+  
+  x_trans <- log(elk_vals + 1e-6)
+  ref_trans <- log(ref_val + 1e-6)
+  
+  effect_mat <- outer(beta_draws, x_trans - ref_trans)
+  
+  tibble(
+    x = elk_vals,
+    effect = apply(effect_mat, 2, mean),
+    low = apply(effect_mat, 2, quantile, probs = 0.025, na.rm = TRUE),
+    high = apply(effect_mat, 2, quantile, probs = 0.975, na.rm = TRUE)
+  )
+}
+
 ################################################################################
 ############------------ Reproducing regression plots --------------############
 ################################################################################
@@ -924,6 +1025,7 @@ line_df_pdsi_elk <- make_effect_curve(post_mat, elk_model_specs, "summer_avg_pds
 line_df_elk_wolf <- make_effect_curve(post_mat, wolf_model_specs, "elk_N_female", predictor_specs)
 line_df_bison_wolf <- make_effect_curve(post_mat, wolf_model_specs, "NR_Bison", predictor_specs)
 line_df_wolf_wolf <- make_effect_curve(post_mat, wolf_model_specs, "wolf_N_tot", predictor_specs)
+line_df_cougar_elk <- make_effect_curve(post_mat, elk_model_specs, "cougar_N", predictor_specs)
 
 wolf_plot_elk <- plot_effect(
   plot_df = plot_df_elk,
@@ -1015,6 +1117,23 @@ griz_plot_elk <- plot_effect(
   subtitle = "Other predictors held constant at their means",
   fill_color = "#4B7F52",
   line_color = "#4B7F52"
+)
+
+cougar_plot_elk <- plot_effect(
+  plot_df = plot_df_elk,
+  curve_df = line_df_cougar_elk,
+  x_var = "cougar_N",
+  y_var = "elk_surv",
+  ymin_var = "elk_low",
+  ymax_var = "elk_high",
+  xlow_var = "cougar_low",
+  xhigh_var = "cougar_high",
+  x_label = "Cougar abundance",
+  y_label = "Elk survival",
+  title = "Estimated effect of cougar abundance on elk survival",
+  subtitle = "Other predictors held constant at their means",
+  fill_color = "#7A5C99",
+  line_color = "#7A5C99"
 )
 
 elkN_plot_elk <- plot_effect(
@@ -1159,10 +1278,49 @@ griz_elkCalf_plot <- ggplot() +
     subtitle = "Curve shows change relative to the median observed elk calf abundance"
   )
 
+cougar_elk_curve <- make_cougar_elk_effect_curve(
+  post_mat,
+  seq(
+    min(elk_cougar_pts$elk_N_female, na.rm = TRUE),
+    max(elk_cougar_pts$elk_N_female, na.rm = TRUE),
+    length.out = 200
+  )
+)
+
+cougar_elk_plot <- ggplot() +
+  geom_ribbon(
+    data = cougar_elk_curve,
+    aes(x = x, ymin = low, ymax = high),
+    fill = "#7A5C99",
+    alpha = 0.25
+  ) +
+  geom_line(
+    data = cougar_elk_curve,
+    aes(x = x, y = effect),
+    color = "#7A5C99",
+    linewidth = 1
+  ) +
+  geom_point(
+    data = elk_cougar_pts,
+    aes(x = elk_N_female, y = 0),
+    shape = 21,
+    fill = "gold",
+    color = "black",
+    size = 2
+  ) +
+  theme_classic() +
+  labs(
+    x = "Elk female abundance",
+    y = "Change in expected log cougar abundance",
+    title = "Estimated effect of elk abundance on cougar population process",
+    subtitle = "Curve shows change relative to the median observed elk abundance"
+  )
+
 # elk regressions
 wolf_plot_elk
 winter_plot_elk
 griz_plot_elk
+cougar_plot_elk
 npp_plot_elk
 browndown_plot_elk
 pdsi_plot_elk
@@ -1181,6 +1339,9 @@ griz_elkCalf_plot
 # bison
 bison_cull_plot
 
+# cougar
+cougar_elk_plot
+
 ################################################################################
 ##########----------------- Coefficient density plots -----------------#########
 ################################################################################
@@ -1193,7 +1354,8 @@ make_coef_density_plot_grouped <- function(post_mat, coef_names, label_map,
                                              "Intercept",
                                              "Wolf abundance",
                                              "Grizzly abundance",
-                                             #"Harvest",
+                                             "Cougar abundance",
+                                             #'Harvest',
                                              "Elk abundance",
                                              "Bison abundance",
                                              "Density dependence",
@@ -1228,6 +1390,7 @@ make_coef_density_plot_grouped <- function(post_mat, coef_names, label_map,
         str_detect(pretty, regex("intercept", ignore_case = TRUE)) ~ "Intercept",
         str_detect(pretty, regex("grizzly effect", ignore_case = TRUE)) ~ "Grizzly abundance",
         str_detect(pretty, regex("bison effect", ignore_case = TRUE)) ~ "Bison abundance",
+        str_detect(pretty, regex("cougar effect", ignore_case = TRUE)) ~ "Cougar abundance",
         #str_detect(pretty, regex("harvest effect", ignore_case = TRUE)) ~ "Harvest",
         str_detect(pretty, regex("annual NPP effect", ignore_case = TRUE)) ~ "Annual NPP",
         str_detect(pretty, regex("browndown effect", ignore_case = TRUE)) ~ "Browndown",
@@ -1266,12 +1429,14 @@ elk_coef_plot <- make_coef_density_plot_grouped(
     "beta0_calfSurv", 
     "beta1_calfSurv_wolfN", 
     "beta2_calfSurv_winterSeverity", 
-    "beta3_calfSurv_grizN", 
+    "beta3_calfSurv_grizN",
+    "beta4_calfSurv_cougarN",
     "beta5_calfSurv_elkN",
     
     "beta0_yaSurv", 
     "beta1_yaSurv_wolfN", 
     "beta2_yaSurv_winterSeverity",
+    "beta4_yaSurv_cougarN",
     "beta5_yaSurv_elkN",
     "beta6_yaSurv_annualNpp", 
     "beta7_yaSurv_browndown", 
@@ -1279,12 +1444,13 @@ elk_coef_plot <- make_coef_density_plot_grouped(
     
     "beta0_oaSurv", 
     "beta1_oaSurv_wolfN", 
-    "beta2_oaSurv_winterSeverity", 
+    "beta2_oaSurv_winterSeverity",
+    "beta4_oaSurv_cougarN",
     "beta5_oaSurv_elkN",
     "beta6_oaSurv_annualNpp", 
     "beta7_oaSurv_browndown", 
     "beta8_oaSurv_pdsi"
-    ),
+  ),
   label_map = pretty_coef_labels,
   keep = dens_coefs_elk,
   fill_color = "#236192",
@@ -1293,6 +1459,7 @@ elk_coef_plot <- make_coef_density_plot_grouped(
     "Intercept",
     "Wolf abundance",
     "Grizzly abundance",
+    "Cougar abundance",
     #"Harvest",
     "Elk abundance",
     "Bison abundance",
@@ -1301,7 +1468,7 @@ elk_coef_plot <- make_coef_density_plot_grouped(
     "Annual NPP",
     "Browndown",
     "PDSI"
-  ),  
+  ),
   model_order = c("Calf survival", "YA survival", "OA survival")
 )
 
@@ -1353,11 +1520,23 @@ bison_coef_plot <- tibble(value = post_mat[, "beta1_bison_cull"]) %>%
     title = "Posterior distribution of bison cull/harvest effect on bison abundance"
   )
 
+cougar_coef_plot <- tibble(value = post_mat[, "beta1_cougar_elk"]) %>%
+  ggplot(aes(x = value)) +
+  geom_density(fill = "#7A5C99", alpha = 0.45) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  theme_bw() +
+  labs(
+    x = "Posterior value",
+    y = "Density",
+    title = "Posterior distribution of elk effect on cougar abundance"
+  )
+
 # view plots
 elk_coef_plot
 wolf_coef_plot
 griz_coef_plot
 bison_coef_plot
+cougar_coef_plot
 
 ################################################################################
 #########----------------- Evidence classification ----------------#############
@@ -1419,6 +1598,12 @@ bison_coef_evidence <- classify_evidence(post_mat[, "beta1_bison_cull"]) %>%
   mutate(
     parameter = "beta1_bison_cull",
     label = "Bison cull/harvest effect"
+  )
+
+cougar_coef_evidence <- classify_evidence(post_mat[, "beta1_cougar_elk"]) %>%
+  mutate(
+    parameter = "beta1_cougar_elk",
+    label = "Cougar elk effect"
   )
 
 ################################################################################
@@ -1530,6 +1715,7 @@ elk_validation_plot
 wolf_validation_plot
 griz_validation_plot
 bison_validation_plot
+cougar_validation_plot
 
 # vital rates
 elk_vrate_plot
@@ -1539,9 +1725,8 @@ wolf_vrate_plot
 wolf_plot_elk
 winter_plot_elk
 griz_plot_elk
+cougar_plot_elk
 elkN_plot_elk
-# yaHarvest_plot_elk
-# oaHarvest_plot_elk
 npp_plot_elk
 browndown_plot_elk
 pdsi_plot_elk
@@ -1560,6 +1745,9 @@ griz_coef_plot
 # bison
 bison_cull_plot
 bison_coef_plot
+
+# cougars
+cougar_coef_plot
 
 # elasticity
 lambda_plot
@@ -1852,6 +2040,27 @@ cat(
     bison_coef_evidence$direction,
     ", evidence = ",
     bison_coef_evidence$evidence,
+    "\n"
+  )
+)
+
+cat(
+  " --------------------------------------------------------\n",
+  "COUGAR PROCESS COEFFICIENT SUMMARY\n",
+  "--------------------------------------------------------\n\n",
+  paste0(
+    "Cougar elk effect: median = ",
+    round(cougar_coef_evidence$median, 3),
+    ", 95% CI [",
+    round(cougar_coef_evidence$ci95_low, 3), ", ",
+    round(cougar_coef_evidence$ci95_high, 3), "]",
+    ", 80% CI [",
+    round(cougar_coef_evidence$ci80_low, 3), ", ",
+    round(cougar_coef_evidence$ci80_high, 3), "]",
+    ", direction = ",
+    cougar_coef_evidence$direction,
+    ", evidence = ",
+    cougar_coef_evidence$evidence,
     "\n"
   )
 )
