@@ -1622,7 +1622,7 @@ elk_coef_plot <- make_coef_density_plot_stacked(
 #   model_order = c("Calf survival", "YA survival", "OA survival")
 # )
 
-wolf_coef_plot <- make_coef_density_plot_grouped(
+wolf_coef_plot <- make_coef_density_plot_stacked(
   post_mat = post_mat,
   coef_names = c(
     "beta0_wpupSurv", 
