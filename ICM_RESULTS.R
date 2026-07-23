@@ -28,7 +28,7 @@ elk_dat_n <- elk_dat_n %>%
   filter(year %in% community_years) %>%
   arrange(match(year, community_years))
 
-# select either "NR" or "full" for northern range vs. total YELL poopulation
+# select either "NR" or "full" for northern range vs. total YELL population
 wolf_range <- "full"
 
 # import wolf data
@@ -55,7 +55,7 @@ regression_years <- setdiff(community_years, drop_regression_years)
 # - character vector = exact pretty labels to keep
 # - regex:<pattern> = regex matched against pretty labels e.g., "regex:YA"
 
-dens_coefs_elk <- "all"
+dens_coefs_elk <- "regex:(wolf|grizzly|cougar)"
 dens_coefs_wolf <- "all"
 
 ################################################################################
@@ -1126,8 +1126,8 @@ cougar_plot_elk <- plot_effect(
   y_var = "elk_surv",
   ymin_var = "elk_low",
   ymax_var = "elk_high",
-  xlow_var = "cougar_low",
-  xhigh_var = "cougar_high",
+  # xlow_var = "cougar_low",
+  # xhigh_var = "cougar_high",
   x_label = "Cougar abundance",
   y_label = "Elk survival",
   title = "Estimated effect of cougar abundance on elk survival",
@@ -1143,8 +1143,8 @@ elkN_plot_elk <- plot_effect(
   y_var = "elk_surv",
   ymin_var = "elk_low",
   ymax_var = "elk_high",
-  xlow_var = "elk_low_x",
-  xhigh_var = "elk_high_x",
+  # xlow_var = "elk_low_x",
+  # xhigh_var = "elk_high_x",
   x_label = "Elk abundance",
   y_label = "Elk survival",
   title = "Estimated effect of density dependence on elk survival",
@@ -1542,30 +1542,30 @@ make_coef_density_plot_stacked <- function(post_mat, coef_names, label_map,
 elk_coef_plot <- make_coef_density_plot_stacked(
   post_mat = post_mat,
   coef_names = c(
-    "beta0_calfSurv", 
-    "beta1_calfSurv_wolfN", 
-    "beta2_calfSurv_winterSeverity", 
+    # "beta0_calfSurv", 
+    "beta1_calfSurv_wolfN",
+    # "beta2_calfSurv_winterSeverity", 
     "beta3_calfSurv_grizN",
     "beta4_calfSurv_cougarN",
-    "beta5_calfSurv_elkN",
+    # "beta5_calfSurv_elkN",
     
-    "beta0_yaSurv", 
+    # "beta0_yaSurv", 
     "beta1_yaSurv_wolfN", 
-    "beta2_yaSurv_winterSeverity",
+    # "beta2_yaSurv_winterSeverity",
     "beta4_yaSurv_cougarN",
-    "beta5_yaSurv_elkN",
-    "beta6_yaSurv_annualNpp", 
-    "beta7_yaSurv_browndown", 
-    "beta8_yaSurv_pdsi",
+    # "beta5_yaSurv_elkN",
+    # "beta6_yaSurv_annualNpp", 
+    # "beta7_yaSurv_browndown", 
+    # "beta8_yaSurv_pdsi",
     
-    "beta0_oaSurv", 
+    # "beta0_oaSurv", 
     "beta1_oaSurv_wolfN", 
-    "beta2_oaSurv_winterSeverity",
-    "beta4_oaSurv_cougarN",
-    "beta5_oaSurv_elkN",
-    "beta6_oaSurv_annualNpp", 
-    "beta7_oaSurv_browndown", 
-    "beta8_oaSurv_pdsi"
+    # "beta2_oaSurv_winterSeverity",
+    "beta4_oaSurv_cougarN"#,
+    # "beta5_oaSurv_elkN",
+    # "beta6_oaSurv_annualNpp", 
+    # "beta7_oaSurv_browndown", 
+    # "beta8_oaSurv_pdsi"
   ),
   label_map = pretty_coef_labels,
   keep = dens_coefs_elk,
