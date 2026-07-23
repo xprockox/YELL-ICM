@@ -1307,6 +1307,11 @@ save(
   icm_samples,
   icm_samples_clean,
   icm_summary,
+  icm_code,
+  icm_data,
+  icm_params,
+  icm_constants,
+  make_icm_inits,
   community_years,
   elk_dat_n,
   wolf_pop,
@@ -1314,11 +1319,11 @@ save(
   bison,
   cougars,
   covars,
-  icm_constants,
   run_time,
   drop_regression_years,
   file = "data/outputs/ICM_parallel_output_2026-07-08.RData"
 )
+
 ################################################################################
 ################################################################################
 ################################################################################
