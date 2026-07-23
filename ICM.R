@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Combines elk IPM + wolf IPM in one NIMBLE model
-### Last updated: July 8, 2026
+### Last updated: July 23, 2026
 
 ################################################################################
 ############################ Packages and settings #############################
@@ -1321,7 +1321,7 @@ save(
   covars,
   run_time,
   drop_regression_years,
-  file = "data/outputs/ICM_parallel_output_2026-07-08.RData"
+  file = "data/outputs/ICM_parallel_output_2026-07-23.RData"
 )
 
 ################################################################################
