@@ -20,7 +20,7 @@ library(nimble)
 ################################################################################
 
 # load model results
-load("data/outputs/ICM_parallel_output_2026-07-08.RData")
+load("data/outputs/ICM_parallel_output_2026-07-23.RData")
 
 # import elk data
 elk_dat_n <- read.csv("data/elk_abundanceEstimates_stages.csv")
@@ -1347,83 +1347,6 @@ cougar_elk_plot
 ##########----------------- Coefficient density plots -----------------#########
 ################################################################################
 
-#' make_coef_density_plot_grouped <- function(post_mat, coef_names, label_map,
-#'                                            keep = "all",
-#'                                            fill_color,
-#'                                            title,
-#'                                            effect_order = c(
-#'                                              "Intercept",
-#'                                              "Wolf abundance",
-#'                                              "Grizzly abundance",
-#'                                              "Cougar abundance",
-#'                                              #'Harvest',
-#'                                              "Elk abundance",
-#'                                              "Bison abundance",
-#'                                              "Density dependence",
-#'                                              "Winter severity",
-#'                                              "Annual NPP",
-#'                                              "Browndown",
-#'                                              "PDSI"
-#'                                            ),
-#'                                            model_order = NULL) {
-#'   keep_resolved <- resolve_coef_keep(
-#'     coef_names = coef_names,
-#'     label_map = label_map,
-#'     keep = keep
-#'   )
-#'   
-#'   df <- as_tibble(post_mat[, coef_names, drop = FALSE]) %>%
-#'     pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
-#'     mutate(
-#'       pretty = recode(parameter, !!!label_map)
-#'     ) %>%
-#'     filter(pretty %in% keep_resolved) %>%
-#'     mutate(
-#'       model_group = case_when(
-#'         str_detect(pretty, "^Calf survival") ~ "Calf survival",
-#'         str_detect(pretty, "^YA survival") ~ "YA survival",
-#'         str_detect(pretty, "^OA survival") ~ "OA survival",
-#'         str_detect(pretty, "^Wolf pup survival") ~ "Wolf pup survival",
-#'         str_detect(pretty, "^Wolf adult survival") ~ "Wolf adult survival",
-#'         TRUE ~ "Other"
-#'       ),
-#'       effect_type = case_when(
-#'         str_detect(pretty, regex("intercept", ignore_case = TRUE)) ~ "Intercept",
-#'         str_detect(pretty, regex("grizzly effect", ignore_case = TRUE)) ~ "Grizzly abundance",
-#'         str_detect(pretty, regex("bison effect", ignore_case = TRUE)) ~ "Bison abundance",
-#'         str_detect(pretty, regex("cougar effect", ignore_case = TRUE)) ~ "Cougar abundance",
-#'         #str_detect(pretty, regex("harvest effect", ignore_case = TRUE)) ~ "Harvest",
-#'         str_detect(pretty, regex("annual NPP effect", ignore_case = TRUE)) ~ "Annual NPP",
-#'         str_detect(pretty, regex("browndown effect", ignore_case = TRUE)) ~ "Browndown",
-#'         str_detect(pretty, regex("PDSI effect", ignore_case = TRUE)) ~ "PDSI",
-#'         str_detect(pretty, regex("winter severity effect", ignore_case = TRUE)) ~ "Winter severity",
-#'         str_detect(pretty, regex("density dependence effect", ignore_case = TRUE)) ~ "Density dependence",
-#'         str_detect(pretty, regex("wolf effect", ignore_case = TRUE)) ~ "Wolf abundance",
-#'         str_detect(pretty, regex("elk effect", ignore_case = TRUE)) ~ "Elk abundance",
-#'         TRUE ~ pretty
-#'       )
-#'     )
-#'   
-#'   df <- df %>%
-#'     mutate(effect_type = factor(effect_type, levels = effect_order))
-#'   
-#'   if (!is.null(model_order)) {
-#'     df <- df %>%
-#'       mutate(model_group = factor(model_group, levels = model_order))
-#'   }
-#'   
-#'   ggplot(df, aes(x = value)) +
-#'     geom_density(fill = fill_color, alpha = 0.45) +
-#'     geom_vline(xintercept = 0, linetype = 2) +
-#'     facet_grid(model_group ~ effect_type, scales = "free") +
-#'     theme_bw() +
-#'     labs(
-#'       x = "Posterior value",
-#'       y = "Density",
-#'       title = title
-#'     )
-#' }
-
 make_coef_density_plot_stacked <- function(post_mat, coef_names, label_map,
                                            keep = "all",
                                            fill_color,
@@ -1573,55 +1496,6 @@ elk_coef_plot <- make_coef_density_plot_stacked(
   fill_color = "#236192",
   title = "Posterior distributions of elk regression coefficients"
 )
-
-# elk_coef_plot <- make_coef_density_plot_grouped(
-#   post_mat = post_mat,
-#   coef_names = c(
-#     "beta0_calfSurv", 
-#     "beta1_calfSurv_wolfN", 
-#     "beta2_calfSurv_winterSeverity", 
-#     "beta3_calfSurv_grizN",
-#     "beta4_calfSurv_cougarN",
-#     "beta5_calfSurv_elkN",
-#     
-#     "beta0_yaSurv", 
-#     "beta1_yaSurv_wolfN", 
-#     "beta2_yaSurv_winterSeverity",
-#     "beta4_yaSurv_cougarN",
-#     "beta5_yaSurv_elkN",
-#     "beta6_yaSurv_annualNpp", 
-#     "beta7_yaSurv_browndown", 
-#     "beta8_yaSurv_pdsi",
-#     
-#     "beta0_oaSurv", 
-#     "beta1_oaSurv_wolfN", 
-#     "beta2_oaSurv_winterSeverity",
-#     "beta4_oaSurv_cougarN",
-#     "beta5_oaSurv_elkN",
-#     "beta6_oaSurv_annualNpp", 
-#     "beta7_oaSurv_browndown", 
-#     "beta8_oaSurv_pdsi"
-#   ),
-#   label_map = pretty_coef_labels,
-#   keep = dens_coefs_elk,
-#   fill_color = "#236192",
-#   title = "Posterior distributions of elk regression coefficients",
-#   effect_order = c(
-#     "Intercept",
-#     "Wolf abundance",
-#     "Grizzly abundance",
-#     "Cougar abundance",
-#     #"Harvest",
-#     "Elk abundance",
-#     "Bison abundance",
-#     "Density dependence",
-#     "Winter severity",
-#     "Annual NPP",
-#     "Browndown",
-#     "PDSI"
-#   ),
-#   model_order = c("Calf survival", "YA survival", "OA survival")
-# )
 
 wolf_coef_plot <- make_coef_density_plot_stacked(
   post_mat = post_mat,
@@ -2225,7 +2099,7 @@ icm_model <- nimbleModel(
   code = icm_code,
   constants = icm_constants,
   data = icm_data,
-  inits = make_icm_inits()
+  inits = waic_inits
 )
 
 C_icm_model <- compileNimble(icm_model)
