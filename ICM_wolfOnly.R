@@ -1,7 +1,7 @@
 ### Integrated Community Model (ICM)
 ### Combines elk IPM + wolf IPM in one NIMBLE model
 ### EXCLUDES GRIZZLIES AND COUGARS IN REGRESSION
-### Last updated: July 23, 2026
+### Last updated: July 24, 2026
 
 ################################################################################
 ############################ Packages and settings #############################
@@ -1102,6 +1102,9 @@ make_icm_inits <- function() {
   )
 }
 
+# construct the inits for use in WAIC calculations later on
+waic_inits <- make_icm_inits()
+
 # params to monitor
 icm_params <- c(
   # elk demography
@@ -1166,7 +1169,11 @@ icm_params <- c(
   "beta3_wadSurv_wolfN",
   
   # wolf errors
-  "sigma_wpup", "sigma_wad", "eps_wolf_s_p", "eps_wolf_s_a"
+  "sigma_wpup", "sigma_wad", "eps_wolf_s_p", "eps_wolf_s_a",
+  
+  # all remaining parameters must be monitored to retroactively calculate WAIC
+  'logit_elk_p_13', 'elk_sigma_obs_female', 'wolf_sigma_obs', 'logit_elk_s_ya', 
+  'logit_elk_s_oa', 'logit_wolf_s_p', 'logit_wolf_s_a', 'wolf_N_p_bio'
 )
 
 ################################################################################
@@ -1305,14 +1312,20 @@ icm_summary <- MCMCsummary(icm_samples_clean)
 # write data
 # stop('The following line will overwrite data. Are you sure you would like to proceed?')
 save(
+  
+  # posterior draws
   icm_samples,
   icm_samples_clean,
-  icm_summary,
+  
+  # objects required to reconstruct the model for offline WAIC
   icm_code,
   icm_data,
-  icm_params,
   icm_constants,
-  make_icm_inits,
+  waic_inits,
+  
+  # useful supporting output
+  icm_summary,
+  icm_params,
   community_years,
   elk_dat_n,
   wolf_pop,
@@ -1322,7 +1335,10 @@ save(
   covars,
   run_time,
   drop_regression_years,
-  file = "data/outputs/ICM_parallel_output_2026-07-23_wolfOnly.RData"
+  n_years,
+  
+  file = "data/outputs/ICM_parallel_output_2026-07-08.RData"
+  
 )
 
 ################################################################################

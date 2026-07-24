@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Results exploration
-### Last updated: July 9, 2026
+### Last updated: July 24, 2026
 ### xprockox@gmail.com
 
 ################################################################################
