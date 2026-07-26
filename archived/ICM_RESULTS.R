@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Results exploration
-### Last updated: July 24, 2026
+### Last updated: July 26, 2026
 ### xprockox@gmail.com
 
 ################################################################################
@@ -20,7 +20,7 @@ library(nimble)
 ################################################################################
 
 # load model results
-load("data/outputs/ICM_parallel_output_2026-07-23.RData")
+load("data/outputs/ICM_parallel_output_2026-07-24.RData")
 
 # import elk data
 elk_dat_n <- read.csv("data/elk_abundanceEstimates_stages.csv")
@@ -56,7 +56,7 @@ regression_years <- setdiff(community_years, drop_regression_years)
 # - character vector = exact pretty labels to keep
 # - regex:<pattern> = regex matched against pretty labels e.g., "regex:YA"
 
-dens_coefs_elk <- "regex:(wolf|grizzly|cougar)"
+dens_coefs_elk <- "non-intercepts"
 dens_coefs_wolf <- "all"
 
 ################################################################################
@@ -317,6 +317,33 @@ resolve_coef_keep <- function(coef_names, label_map, keep = "all") {
   pretty_names[pretty_names %in% keep]
 }
 
+get_stage_coef_names <- function(model_specs, stage_name, post_mat,
+                                 include_intercept = TRUE) {
+  
+  if (!stage_name %in% names(model_specs)) {
+    stop("Stage not found in model_specs: ", stage_name)
+  }
+  
+  stage_spec <- model_specs[[stage_name]]
+  
+  coef_names <- unname(stage_spec$terms)
+  
+  if (include_intercept) {
+    coef_names <- c(stage_spec$intercept, coef_names)
+  }
+  
+  missing_coefs <- setdiff(coef_names, colnames(post_mat))
+  
+  if (length(missing_coefs) > 0) {
+    message(
+      "The following coefficients are listed in the model specification ",
+      "but are absent from post_mat and will be skipped:\n",
+      paste(missing_coefs, collapse = ", ")
+    )
+  }
+  
+  intersect(coef_names, colnames(post_mat))
+}
 ################################################################################
 #########--------------- Clean posterior objects ---------------################
 ################################################################################
@@ -1497,6 +1524,39 @@ elk_coef_plot <- make_coef_density_plot_stacked(
   title = "Posterior distributions of elk regression coefficients"
 )
 
+# Automatically obtain all coefficients in the young-adult survival regression
+ya_coef_names <- get_stage_coef_names(
+  model_specs = elk_model_specs,
+  stage_name = "Young adult survival",
+  post_mat = post_mat,
+  include_intercept = TRUE
+)
+
+ya_coef_names
+
+ya_coef_plot <- make_coef_density_plot_stacked(
+  post_mat = post_mat,
+  coef_names = ya_coef_names,
+  label_map = pretty_coef_labels,
+  keep = dens_coefs_ya,
+  fill_color = "#236192",
+  title = "Posterior distributions of young-adult elk survival coefficients",
+  effect_order = c(
+    "Intercept",
+    "Wolf abundance",
+    "Cougar abundance",
+    "Density dependence",
+    "Winter severity",
+    "Annual NPP",
+    "Browndown",
+    "PDSI"
+  ),
+  model_order = "YA survival",
+  scale_factor = 0.35
+)
+
+ya_coef_plot
+
 wolf_coef_plot <- make_coef_density_plot_stacked(
   post_mat = post_mat,
   coef_names = c(
@@ -1562,6 +1622,8 @@ wolf_coef_plot
 griz_coef_plot
 bison_coef_plot
 cougar_coef_plot
+
+ya_coef_plot
 
 ################################################################################
 #########----------------- Evidence classification ----------------#############

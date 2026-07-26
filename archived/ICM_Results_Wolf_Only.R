@@ -20,7 +20,7 @@ library(nimble)
 ################################################################################
 
 # load model results
-load("data/outputs/ICM_parallel_output_2026-07-23_wolfOnly.RData")
+load("data/outputs/ICM_parallel_output_2026-07-24_wolfOnly.RData")
 
 # import elk data
 elk_dat_n <- read.csv("data/elk_abundanceEstimates_stages.csv")
