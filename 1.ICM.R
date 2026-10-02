@@ -1,6 +1,6 @@
 ### Integrated Community Model (ICM)
 ### Combines elk IPM + wolf IPM in one NIMBLE model
-### Last updated: July 24, 2026
+### Last updated: Oct. 2, 2026
 
 ################################################################################
 ############################ Packages and settings #############################
@@ -731,6 +731,7 @@ icm_code <- nimbleCode({
   beta6_yaSurv_annualNpp ~ dnorm(0, 1 / 0.3^2)
   beta7_yaSurv_browndown ~ dnorm(0, 1 / 0.3^2)
   beta8_yaSurv_pdsi ~ dnorm(0, 1 / 0.3^2)
+  beta9_yaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   
   # old adults
   beta0_oaSurv ~ dnorm(qlogis(0.80), 1 / 0.3^2)
@@ -741,6 +742,7 @@ icm_code <- nimbleCode({
   beta6_oaSurv_annualNpp ~ dnorm(0, 1 / 0.3^2)
   beta7_oaSurv_browndown ~ dnorm(0, 1 / 0.3^2)
   beta8_oaSurv_pdsi ~ dnorm(0, 1 / 0.3^2)
+  beta9_oaSurv_harvest ~ dnorm(0, 1 / 0.3^2)
   
   # error
   sigma_calf ~ dunif(0, 0.5)
@@ -832,6 +834,7 @@ icm_code <- nimbleCode({
       beta6_yaSurv_annualNpp * annualNpp_std[t - 1] + # vegetation productivity
       beta7_yaSurv_browndown * browndown_std[t - 1] + # brown-down date (growing season length)
       beta8_yaSurv_pdsi * pdsi_std[t - 1] + # drought index
+      beta9_yaSurv_harvest * elk_harvest_std[t] + # harvest
       eps_elk_s_ya[t] # error
     
     # elk old adult regression
@@ -844,6 +847,7 @@ icm_code <- nimbleCode({
       beta6_oaSurv_annualNpp * annualNpp_std[t - 1] + # vegetation productivity
       beta7_oaSurv_browndown * browndown_std[t - 1] + # brown-down date (growing season length)
       beta8_oaSurv_pdsi * pdsi_std[t - 1] + # drought index
+      beta9_oaSurv_harvest * elk_harvest_std[t] + # harvest
       eps_elk_s_oa[t] # error
     
     # wolf pup regression
@@ -926,9 +930,10 @@ icm_data <- list(
   pdsi_std = covars_std$summer_avg_pdsi,
   bison_obs = bison$NR_Bison,
   griz_obs = grizzly$griz_N,
-  cougar_obs = cougars$cougar_N
+  cougar_obs = cougars$cougar_N,
   # elk_ya_harvest = covars$age_2_13,
-  # elk_oa_harvest = covars$age_14_plus
+  # elk_oa_harvest = covars$age_14_plus,
+  elk_harvest_std = covars_std$elk_harvest
 )
 
 # initial values
@@ -1066,6 +1071,7 @@ make_icm_inits <- function() {
     beta6_yaSurv_annualNpp = 0, 
     beta7_yaSurv_browndown = 0, 
     beta8_yaSurv_pdsi = 0,
+    beta9_yaSurv_harvest = 0,
     
     beta0_oaSurv = qlogis(0.80),
     beta1_oaSurv_wolfN = 0,
@@ -1075,6 +1081,7 @@ make_icm_inits <- function() {
     beta6_oaSurv_annualNpp = 0, 
     beta7_oaSurv_browndown = 0, 
     beta8_oaSurv_pdsi = 0,
+    beta9_oaSurv_harvest = 0,
     
     sigma_calf = 0.1,
     sigma_ya = 0.1,
@@ -1143,6 +1150,7 @@ icm_params <- c(
   'beta6_yaSurv_annualNpp', 
   'beta7_yaSurv_browndown',
   'beta8_yaSurv_pdsi',
+  "beta9_yaSurv_harvest",
   
   "beta0_oaSurv", 
   "beta1_oaSurv_wolfN", 
@@ -1152,6 +1160,7 @@ icm_params <- c(
   'beta6_oaSurv_annualNpp', 
   'beta7_oaSurv_browndown',
   'beta8_oaSurv_pdsi',
+  "beta9_oaSurv_harvest",
   
   # elk errors
   "sigma_calf", "sigma_ya", "sigma_oa", "eps_elk_s_c", "eps_elk_s_ya", "eps_elk_s_oa",
@@ -1336,7 +1345,7 @@ save(
   drop_regression_years,
   n_years,
   
-  file = "data/outputs/ICM_parallel_output_2026-07-24.RData"
+  file = "data/outputs/ICM_output_2026-10-02.RData"
   
 )
 
